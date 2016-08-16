@@ -16,6 +16,7 @@
 #include "caffe/util/insert_splits.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/util/upgrade_proto.hpp"
+#include "caffe/layers/opg_layer.hpp"
 
 namespace caffe {
 
@@ -80,6 +81,13 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
           << "either 0 or bottom_size times ";
     }
     layers_.push_back(LayerRegistry<Dtype>::CreateLayer(layer_param));
+    
+    if(layer_param.type().compare("OPG")==0){
+        int index=layers_.size()-1;
+	shared_ptr<OPGROISelectLayer<Dtype> > opg=boost::dynamic_pointer_cast<OPGLayer<Dtype> >(layers_[index]);
+	opg->Set_net(this);
+    }
+
     layer_names_.push_back(layer_param.name());
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating Layer " << layer_param.name();
@@ -195,10 +203,10 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     if (!layer_contributes_loss) { layer_need_backward_[layer_id] = false; }
     if (Caffe::root_solver()) {
       if (layer_need_backward_[layer_id]) {
-        LOG(INFO) << layer_names_[layer_id] << " needs backward computation.";
+        LOG(INFO) << layer_names_[layer_id] << " \t\tneeds backward computation.";
       } else {
         LOG(INFO) << layer_names_[layer_id]
-            << " does not need backward computation.";
+            << " \t\tdoes not need backward computation.";
       }
     }
     for (int bottom_id = 0; bottom_id < bottom_vecs_[layer_id].size();

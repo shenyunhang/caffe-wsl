@@ -407,6 +407,23 @@ message LayerParameter {
   optional ThresholdParameter threshold_param = 128;
   optional TileParameter tile_param = 138;
   optional WindowDataParameter window_data_param = 129;
+
+  optional CPGParameter cpg_param = 100001;
+  //optional RepartitionParameter repartition_param = 1000014;
+  optional BBoxParameter bbox_param = 1000015;
+  optional GeneralHingeLossParameter general_hinge_loss_param = 100002;
+  optional GeneralPoolingParameter general_pooling_param = 100003;
+  optional GlobalPoolingParameter global_pooling_param = 100004;
+  optional SoftmaxTemperatureParameter softmax_temperature_param = 100005;
+  optional PSROIPoolingParameter psroi_pooling_param = 100006;
+  optional SmoothFeatureLossParameter smooth_feature_loss_param = 100007;
+  optional LogSumExpParameter log_sum_exp_param = 100008;
+  optional DenseCRFParameter dense_crf_param = 100009;
+  optional RegionPoolingParameter region_pooling_param = 100010;
+  optional LoopROIPoolingParameter loop_roi_pooling_param = 100011;
+  optional PolarConstraintParameter polar_constraint_param = 100012;
+  optional CrossEntropyLossParameter cross_entropy_loss_param = 100013;
+
 }
 
 // Message that stores parameters used to apply transformation
@@ -1233,6 +1250,165 @@ message SPPParameter {
     CUDNN = 2;
   }
   optional Engine engine = 6 [default = DEFAULT];
+}
+
+// Message that stores parameters used by OPGROISelectLayer
+message CPGParameter {
+  optional bool is_cpg = 21 [default = true];
+  optional bool is_order = 41 [default = false];
+  optional bool is_contrast = 30 [default = false];
+  optional bool is_crf = 55 [default = false];
+  optional bool is_pred = 56 [default = false];
+  optional bool debug_info = 22 [default = false];
+
+  required string start_layer_name = 23 [default = ''];
+  required string end_layer_name = 24 [default = ''];
+  repeated string opg_blob_name = 25;
+  optional float predict_threshold = 26 [default = 0.5];
+  optional float predict_order = 40 [default = 0.0];
+  optional float crf_threshold = 50 [default = 0.5];
+
+  optional float fg_threshold = 51 [default = 0.5];
+  optional float bg_threshold = 52 [default = 0.001];
+  optional float mass_threshold = 53 [default = 0.0];
+  optional float density_threshold = 54 [default = 0.0];
+}
+
+// Message that stores parameters used by RepartitionLayer
+message RepartitionParameter {
+  optional bool is_opg = 1 [default = true];
+  optional bool debug_info = 3 [default = false];
+  optional float predict_threshold = 6 [default = 0.5];
+  optional float predict_order = 30 [default = 0.0];
+  optional float crf_threshold = 10 [default = 0.5];
+  optional float fg_threshold = 7 [default = 0.5];
+  optional float bg_threshold = 8 [default = 0.001];
+  optional float mass_threshold = 12 [default = 0.0];
+  optional float density_threshold = 13 [default = 0.0];
+  optional bool is_crf = 9 [default = false];
+  optional bool is_pred = 11 [default = false];
+  optional bool is_order = 20 [default = false];
+}
+
+// Message that stores parameters used by BBoxLayer
+message BBoxParameter {
+  optional bool is_opg = 1 [default = true];
+  optional bool debug_info = 3 [default = false];
+  optional float predict_threshold = 6 [default = 0.5];
+  optional float crf_threshold = 10 [default = 0.5];
+  optional float fg_threshold = 7 [default = 0.5];
+  optional float bg_threshold = 8 [default = 0.001];
+  optional float mass_threshold = 12 [default = 0.0];
+  optional float density_threshold = 13 [default = 0.0];
+  optional bool is_crf = 9 [default = false];
+  optional bool is_pred = 11 [default = false];
+}
+
+message GeneralHingeLossParameter {
+  enum Norm {
+    L1 = 1;
+    L2 = 2;
+  }
+  // Specify the Norm to use L1 or L2
+  optional Norm norm = 1 [default = L1];
+  optional uint32 display = 2 [default = 1280];
+  optional int32 ignore_label = 3 [default = -1];
+}
+
+message GeneralPoolingParameter {
+  enum PoolMethod {
+    FMAX = 0;
+    FAVE = 1;
+    SUM=2;
+    FSUM=3;
+    TSUM=4;
+    FAVEMAX=5;
+    TAVEMAX=6;
+    MUL=7;
+
+  }
+  optional PoolMethod pool = 1 [default = FMAX]; // The pooling method
+  optional float threshold = 2 [default = 0.0];
+}
+
+message GlobalPoolingParameter {
+  enum PoolMethod {
+    TSUM=1;
+    TAVEMAX=2;
+
+  }
+  optional PoolMethod pool = 1 [default = TAVEMAX]; // The pooling method
+  optional float threshold = 2 [default = 0.0];
+}
+
+message SoftmaxTemperatureParameter {
+  optional float temperature = 1 [default = 1.0];
+  optional bool is_append = 2 [default = false];
+}
+
+message PSROIPoolingParameter {
+  required float spatial_scale = 1; 
+  required int32 output_dim = 2; // output channel number
+  required int32 group_size = 3; // equal to pooled_size
+}
+
+message SmoothFeatureLossParameter {
+  optional float threshold = 1 [default = 0.0];
+  optional float min_overlap = 2 [default = 0.6];
+  optional uint32 max_num_bbox =3 [default = 10];
+  optional bool debug_info = 4 [default = false];
+  optional bool is_sigmoid = 5 [default = false];
+}
+
+message LogSumExpParameter {
+  optional float r = 1 [default = 1.0];
+}
+
+message DenseCRFParameter {
+  // max number of iteration for message passing
+  optional int32 max_iter = 1 [default = 10];
+  // positional std and weight for "Positional" filter (color-independent)
+  repeated float pos_xy_std = 2;
+  repeated float pos_w = 3;
+  // positional std, color std and weight for Bilateral filter
+  repeated float bi_xy_std = 4;
+  repeated float bi_rgb_std = 5;
+  repeated float bi_w = 6; 
+  // output is probability or score (score = log(prob))
+  optional bool output_probability = 7 [default = true];
+}
+
+message RegionPoolingParameter {
+  // Pad, kernel size, and stride are all given as a single value for equal
+  // dimensions in height and width or as Y, X pairs.
+  optional uint32 pooled_h = 1 [default = 0]; // The pooled output height
+  optional uint32 pooled_w = 2 [default = 0]; // The pooled output width
+  // Multiplicative spatial scale factor to translate ROI coords from their
+  // input scale to the scale used when pooling
+  optional float spatial_scale = 3 [default = 1];
+  optional float offset = 4 [default = 6];
+}
+
+// Message that stores parameters used by LoopROIPoolingLayer
+message LoopROIPoolingParameter {
+  // Pad, kernel size, and stride are all given as a single value for equal
+  // dimensions in height and width or as Y, X pairs.
+  optional uint32 pooled_h = 1 [default = 0]; // The pooled output height
+  optional uint32 pooled_w = 2 [default = 0]; // The pooled output width
+  // Multiplicative spatial scale factor to translate ROI coords from their
+  // input scale to the scale used when pooling
+  optional float spatial_scale = 3 [default = 1];
+}
+
+// Message that stores parameters used by PolarConstraintLayer
+message PolarConstraintParameter {
+  optional bool polar = 1 [default = false]; //
+}
+
+// Message that stores parameters used by CrossEntropyLossLayer
+message CrossEntropyLossParameter {
+  optional uint32 display = 1 [default = 1280];
+  optional int32 ignore_label = 2 [default = -1];
 }
 
 // DEPRECATED: use LayerParameter.
