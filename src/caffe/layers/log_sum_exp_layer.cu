@@ -4,20 +4,9 @@
 
 #include "caffe/layers/log_sum_exp_layer.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/util/more_math_functions.hpp"
 
 namespace caffe {
-
-template <typename Dtype>
-Dtype max_element_(const Dtype *in, const int count) {
-  Dtype max_value = -FLT_MAX;
-  for (int i = 0; i < count; ++i) {
-    if (max_value < (*in)) {
-      max_value = (*in);
-    }
-    ++in;
-  }
-  return max_value;
-}
 
 template <typename Dtype>
 void LogSumExpLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
@@ -27,7 +16,7 @@ void LogSumExpLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   exp_.scale_data(r_);
 
   // rx^star
-  Dtype max_value = max_element_(exp_.cpu_data(), count_);
+  Dtype max_value = caffe_cpu_max_element(count_, exp_.cpu_data());
 
   // rx-rx^star
   caffe_gpu_add_scalar(count_, Dtype(-1.0) * (max_value),

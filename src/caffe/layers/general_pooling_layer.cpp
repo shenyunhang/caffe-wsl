@@ -211,9 +211,9 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
               max_value_index = index;
             }
           }
-	  CHECK_NE(max_value,Dtype(-FLT_MAX))<<"can not find max value";
-            top_data[pool_index] = max_value;
-            mask[pool_index] = max_value_index;
+          CHECK_NE(max_value, Dtype(-FLT_MAX)) << "can not find max value";
+          top_data[pool_index] = max_value;
+          mask[pool_index] = max_value_index;
         }
       }
       break;

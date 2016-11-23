@@ -413,11 +413,11 @@ message LayerParameter {
   optional BBoxParameter bbox_param = 1000015;
   optional GeneralHingeLossParameter general_hinge_loss_param = 100002;
   optional GeneralPoolingParameter general_pooling_param = 100003;
-  optional GlobalPoolingParameter global_pooling_param = 100004;
   optional SoftmaxTemperatureParameter softmax_temperature_param = 100005;
   optional PSROIPoolingParameter psroi_pooling_param = 100006;
   optional SmoothFeatureLossParameter smooth_feature_loss_param = 100007;
   optional LogSumExpParameter log_sum_exp_param = 100008;
+  optional GWRPParameter gwrp_param = 100020;
   optional DenseCRFParameter dense_crf_param = 100009;
   optional RegionPoolingParameter region_pooling_param = 100010;
   optional LoopROIPoolingParameter loop_roi_pooling_param = 100011;
@@ -1332,16 +1332,6 @@ message GeneralPoolingParameter {
   optional float threshold = 2 [default = 0.0];
 }
 
-message GlobalPoolingParameter {
-  enum PoolMethod {
-    TSUM=1;
-    TAVEMAX=2;
-
-  }
-  optional PoolMethod pool = 1 [default = TAVEMAX]; // The pooling method
-  optional float threshold = 2 [default = 0.0];
-}
-
 message SoftmaxTemperatureParameter {
   optional float temperature = 1 [default = 1.0];
   optional bool is_append = 2 [default = false];
@@ -1363,6 +1353,10 @@ message SmoothFeatureLossParameter {
 
 message LogSumExpParameter {
   optional float r = 1 [default = 1.0];
+}
+
+message GWRPParameter {
+  optional float d = 1 [default = 1.0];
 }
 
 message DenseCRFParameter {
