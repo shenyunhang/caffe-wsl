@@ -13,7 +13,7 @@ void GWRPLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   GWRPParameter this_layer_param = this->layer_param_.gwrp_param();
   d_ = this_layer_param.d();
   debug_info_ = false;
-  debug_info_ = true;
+  // debug_info_ = true;
   LOG(INFO) << "----------------------------------------------";
   LOG(INFO) << "d_: " << d_;
   LOG(INFO) << "debug_info_: " << debug_info_;

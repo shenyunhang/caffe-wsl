@@ -58,7 +58,8 @@ void GWRPLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
        top[0]->mutable_gpu_data());
 
   if (debug_info_) {
-    std::cout << num_roi_ << " " << normalization_ << " ";
+    std::cout << "GWRPLayer Forward num_roi_: " << num_roi_ << " normalization"
+              << normalization_ << std::endl;
     const Dtype *top_data = top[0]->cpu_data();
     for (int i = 0; i < top[0]->count(); ++i) {
       std::cout << top_data[i] << " ";
