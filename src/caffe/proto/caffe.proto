@@ -1319,15 +1319,16 @@ message GeneralPoolingParameter {
   enum PoolMethod {
     FMAX = 0;
     FAVE = 1;
-    SUM=2;
-    FSUM=3;
-    TSUM=4;
-    FAVEMAX=5;
-    TAVEMAX=6;
-    MUL=7;
+    SUM = 2;
+    MAX = 8;
+    FSUM = 3;
+    TSUM = 4;
+    FAVEMAX = 5;
+    TAVEMAX = 6;
+    MUL = 7;
 
   }
-  optional PoolMethod pool = 1 [default = FMAX]; // The pooling method
+  optional PoolMethod pool = 1 [default = MAX]; // The pooling method
   optional float threshold = 2 [default = 0.0];
 }
 

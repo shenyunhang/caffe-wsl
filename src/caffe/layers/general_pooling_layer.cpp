@@ -27,6 +27,9 @@ void GeneralPoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     case GeneralPoolingParameter_PoolMethod_SUM:
       LOG(INFO) << "Using SUM pooling method.";
       break;
+    case GeneralPoolingParameter_PoolMethod_MAX:
+      LOG(INFO) << "Using MAX pooling method.";
+      break;
     case GeneralPoolingParameter_PoolMethod_FSUM:
       CHECK_EQ(bottom.size(), 2)
           << "Using fliter SUM pooling method need two input blob.";
@@ -185,6 +188,32 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
             const int index = r * num_class + c;
             top_data[pool_index] += bottom_data[index];
           }
+        }
+      }
+      break;
+    case GeneralPoolingParameter_PoolMethod_MAX:
+      // Initialize
+      caffe_set(top_count, Dtype(-FLT_MAX), top_data);
+
+      // The main loop
+      for (int n = 0; n < num_im; ++n) {
+        for (int c = 0; c < num_class; ++c) {
+          const int pool_index = n * num_class + c;
+
+          Dtype max_value = -FLT_MAX;
+          int max_value_index = -1;
+
+          for (int r = 0; r < num_roi; ++r) {
+            const int index = r * num_class + c;
+            const Dtype in = bottom_data[index];
+            if (in > max_value) {
+              max_value = in;
+              max_value_index = index;
+            }
+          }
+	  CHECK_NE(max_value,Dtype(-FLT_MAX))<<"can not find max value";
+            top_data[pool_index] = max_value;
+            mask[pool_index] = max_value_index;
         }
       }
       break;
@@ -354,6 +383,16 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
             const int index = r * num_class + c;
             bottom_diff[index] = top_diff[pool_index];
           }
+        }
+      }
+      break;
+    case GeneralPoolingParameter_PoolMethod_MAX:
+      // The main loop
+      for (int n = 0; n < num_im; ++n) {
+        for (int c = 0; c < num_class; ++c) {
+          const int index = n * num_class + c;
+          const int bottom_index = mask[index];
+          bottom_diff[bottom_index] = top_diff[index];
         }
       }
       break;
