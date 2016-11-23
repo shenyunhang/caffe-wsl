@@ -115,7 +115,7 @@ namespace caffe {
 						for(int w=wstart;w<wend;++w){
 							const int index= h*num_class+w;
 
-							// find the max value in spite with mask
+							// find the max value in spite of mask
 							if(input_data[index]>in_max_all){
 								in_max_all=input_data[index];
 								argmax_data_all[pool_index]=index;

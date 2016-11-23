@@ -13,7 +13,7 @@ void GWRPLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   GWRPParameter this_layer_param = this->layer_param_.gwrp_param();
   d_ = this_layer_param.d();
   debug_info_ = false;
-  // debug_info_ = true;
+  debug_info_ = true;
   LOG(INFO) << "----------------------------------------------";
   LOG(INFO) << "d_: " << d_;
   LOG(INFO) << "debug_info_: " << debug_info_;
@@ -31,8 +31,10 @@ void GWRPLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   weight_data[0] = 1.0;
   weight_sum_data[0] = 1.0;
   for (int n = 1; n < max_num_roi_; ++n) {
-    weight_data[n] = weight_data[n-1] * d_;
-    weight_sum_data[n] = weight_sum_data[n-1] + weight_data[n];
+    weight_data[n] = weight_data[n - 1] * d_;
+    weight_sum_data[n] = weight_sum_data[n - 1] + weight_data[n];
+    if (debug_info_)
+      std::cout << weight_data[n] << " " << weight_sum_data[n] << std::endl;
   }
 }
 
@@ -43,11 +45,11 @@ void GWRPLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   num_roi_ = bottom[0]->shape(0);
   num_class_ = bottom[0]->shape(1);
   count_ = bottom[0]->count();
+  normalization_ = weight_sum_.cpu_data()[num_roi_ - 1];
   CHECK_EQ(num_roi_ * num_class_, count_) << "height and width should be 1.";
   CHECK_LE(num_roi_, max_num_roi_) << "num_roi_ should <= max_num_roi_";
 
   top[0]->Reshape(1, num_class_, 1, 1);
-
   rank_id_.ReshapeLike(*bottom[0]);
 }
 

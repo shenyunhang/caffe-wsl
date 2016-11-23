@@ -46,6 +46,7 @@ class GWRPLayer : public Layer<Dtype> {
   int num_class_;
   int num_roi_;
   int count_;
+  Dtype normalization_;
 
   bool debug_info_;
 };

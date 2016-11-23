@@ -49,14 +49,23 @@ template <typename Dtype>
 void GWRPLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                    const vector<Blob<Dtype> *> &top) {
   caffe_copy(count_, bottom[0]->gpu_data(), bottom[0]->mutable_gpu_diff());
-  Dtype normalization = weight_sum_.cpu_data()[num_roi_];
 
   // NOLINT_NEXT_LINE(whitespace/operators)
   gwrp_forward_gpu<Dtype> << <CAFFE_GET_BLOCKS(num_class_),
                               CAFFE_CUDA_NUM_THREADS>>>
-      (num_class_, num_roi_, normalization, weight_.cpu_data(),
+      (num_class_, num_roi_, normalization_, weight_.cpu_data(),
        bottom[0]->mutable_gpu_diff(), rank_id_.mutable_gpu_data(),
        top[0]->mutable_gpu_data());
+
+  if (debug_info_) {
+    std::cout << num_roi_ << " " << normalization_ << " ";
+    const Dtype *top_data = top[0]->cpu_data();
+    for (int i = 0; i < top[0]->count(); ++i) {
+      std::cout << top_data[i] << " ";
+      /*LOG(INFO)<<top_data[i];*/
+    }
+    std::cout << std::endl;
+  }
 }
 
 template <typename Dtype>
@@ -84,12 +93,10 @@ void GWRPLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype> *> &top,
     return;
   }
 
-  Dtype normalization = weight_sum_.cpu_data()[num_roi_];
-
   // NOLINT_NEXT_LINE(whitespace/operators)
   gwrp_backward_gpu<Dtype> << <CAFFE_GET_BLOCKS(num_class_),
                                CAFFE_CUDA_NUM_THREADS>>>
-      (num_class_, num_roi_, normalization, rank_id_.gpu_data(),
+      (num_class_, num_roi_, normalization_, rank_id_.gpu_data(),
        weight_.gpu_data(), top[0]->gpu_diff(), bottom[0]->mutable_gpu_diff());
 }
 
