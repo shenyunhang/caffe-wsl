@@ -26,7 +26,8 @@ void CrossEntropyLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   LossLayer<Dtype>::Reshape(bottom, top);
 
   count_ = bottom[0]->count();
-  num_ = bottom[0]->num();
+  num_im_ = bottom[0]->num();
+  num_class_ = bottom[0]->channels();
   CHECK_EQ(bottom[0]->count(), bottom[1]->count())
       << "CROSS_ENTROPY_LOSS layer inputs must have the same count.";
 }
@@ -40,7 +41,7 @@ void CrossEntropyLossLayer<Dtype>::Forward_cpu(
   Dtype loss = 0;
   if (ignore_label_ >= 0) {
     for (int i = 0; i < count_; ++i) {
-      if (i % num_ == ignore_label_) continue;
+      if (i % num_class_ == ignore_label_) continue;
       Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
       Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
       loss -= (target[i] * log(prob) + (1 - target[i]) * log(one_prob));
@@ -56,9 +57,9 @@ void CrossEntropyLossLayer<Dtype>::Forward_cpu(
       loss -= (target[i] * log(prob) + (1 - target[i]) * log(one_prob));
     }
   }
-  top[0]->mutable_cpu_data()[0] = loss / num_;
+  top[0]->mutable_cpu_data()[0] = loss / num_im_;
 
-  total_loss_ += loss / num_;
+  total_loss_ += loss / num_im_;
   total_iter_++;
   if (total_iter_ % display_ == 0) {
     LOG(INFO) << this->layer_param().name() << " #iter_: " << total_iter_
@@ -85,11 +86,11 @@ void CrossEntropyLossLayer<Dtype>::Backward_cpu(
   }
   const Dtype* input_data = bottom[0]->cpu_data();
   const Dtype* target = bottom[1]->cpu_data();
-  const Dtype scale = top[0]->cpu_diff()[0] / num_;
+  const Dtype scale = top[0]->cpu_diff()[0] / num_im_;
   Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
   if (ignore_label_ >= 0) {
     for (int i = 0; i < count_; ++i) {
-      if (i % num_ == ignore_label_) {
+      if (i % num_class_ == ignore_label_) {
         bottom_diff[i] = 0;
         continue;
       }
