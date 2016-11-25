@@ -30,8 +30,7 @@ class OPGLayer : public Layer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 2; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 
-  // void setNet(shared_ptr<Net<Dtype> > net){
-  void Set_net(Net<Dtype>* net) {
+  void Set_Net(Net<Dtype>* net) {
     LOG(INFO) << "Setting net in OPGLayer";
     net_ = net;
   }
@@ -45,7 +44,7 @@ class OPGLayer : public Layer<Dtype> {
   void Clear_split_diff();
   void Get_split_top_blob();
   void Show_opg(const Dtype* opg_data, const int cur, const string info = "");
-  bool Need_Repartition(const Dtype label, const Dtype score);
+  bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
   bool Need_Order(const Dtype label, const Dtype score);
 
  protected:
@@ -66,6 +65,7 @@ class OPGLayer : public Layer<Dtype> {
   bool debug_info_;
   bool is_contrast_;
   bool is_order_;
+  bool is_softmax_;
   float predict_threshold_;
   float predict_order_;
   string start_layer_name_;

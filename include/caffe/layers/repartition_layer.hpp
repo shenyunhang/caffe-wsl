@@ -48,7 +48,7 @@ class RepartitionLayer : public Layer<Dtype> {
   void Score_map_crf();
   void InitFilter(const Dtype* const label_gpu_data, Dtype* const top_gpu_data);
   void After();
-  bool Need_Repartition(const Dtype label, const Dtype score);
+  bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
   bool Need_Order(const Dtype label, const Dtype score);
 
  protected:
@@ -65,6 +65,11 @@ class RepartitionLayer : public Layer<Dtype> {
 
   bool is_opg_;
   bool debug_info_;
+  bool is_crf_;
+  bool is_pred_;
+  bool is_order_;
+  bool is_softmax_;
+
   float predict_threshold_;
   float predict_order_;
   float crf_threshold_;
@@ -72,9 +77,6 @@ class RepartitionLayer : public Layer<Dtype> {
   float bg_threshold_;
   float mass_threshold_;
   float density_threshold_;
-  bool is_crf_;
-  bool is_pred_;
-  bool is_order_;
 
   int bottom_opgs_index_;
   int bottom_rois_index_;
@@ -83,6 +85,7 @@ class RepartitionLayer : public Layer<Dtype> {
   int bottom_filt_index_;
   int bottom_io_index_;
   Blob<Dtype>* raw_opg_;
+  Blob<Dtype> fliter_;
 
   int total_im_;
   int total_roi_;

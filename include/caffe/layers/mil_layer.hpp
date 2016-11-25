@@ -5,6 +5,7 @@
 
 #include "caffe/blob.hpp"
 #include "caffe/layer.hpp"
+#include "caffe/net.hpp"
 #include "caffe/proto/caffe.pb.h"
 
 namespace caffe {
@@ -24,8 +25,15 @@ class MILLayer : public Layer<Dtype> {
                        const vector<Blob<Dtype>*>& top);
 
   virtual inline const char* type() const { return "MIL"; }
-  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  //virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int MaxNumBottomBlobs() const { return 5; }
+  virtual inline int MinNumBottomBlobs() const { return 3; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
+
+  void Set_Net(Net<Dtype>* net) {
+    LOG(INFO) << "Setting net in OPGLayer";
+    net_ = net;
+  }
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -38,6 +46,8 @@ class MILLayer : public Layer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
                             const vector<bool>& propagate_down,
                             const vector<Blob<Dtype>*>& bottom);
+
+  Net<Dtype>* net_;
 
   int bottom_label_index_;
   int bottom_predict_index_;
@@ -57,7 +67,7 @@ class MILLayer : public Layer<Dtype> {
   vector<Blob<Dtype>*> repartition_bottom_vec_;
   vector<Blob<Dtype>*> repartition_top_vec_;
 
-  Blob<Dtype>* cpg_blob_;
+  Blob<Dtype> cpg_blob_;
 };
 
 }  // namespace caffe

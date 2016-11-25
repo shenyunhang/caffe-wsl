@@ -390,8 +390,10 @@ void OPGLayer<Dtype>::Clear_split_diff() {
 }
 
 template <typename Dtype>
-bool OPGLayer<Dtype>::Need_Repartition(const Dtype label,
-                                               const Dtype predict) {
+bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
+                                       const Dtype predict) {
+  // in softmax model, we assume the last class is background
+  if (is_softmax_ && cls_id == num_class_ - 1) return false;
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
     if (label <= 0.5) return false;
@@ -414,8 +416,7 @@ bool OPGLayer<Dtype>::Need_Repartition(const Dtype label,
 }
 
 template <typename Dtype>
-bool OPGLayer<Dtype>::Need_Order(const Dtype label,
-                                         const Dtype predict) {
+bool OPGLayer<Dtype>::Need_Order(const Dtype label, const Dtype predict) {
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
     if (label < 0.5) return false;
@@ -545,7 +546,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   vector<int> gt_class;
   for (int i = 0; i < num_class_; ++i) {
     int index = i;
-    if (Need_Repartition(bottom_label[index], predict_data[index])) {
+    if (Need_Repartition(i,bottom_label[index], predict_data[index])) {
     } else if (Need_Order(bottom_label[index], predict_data[index])) {
     } else {
       continue;

@@ -35,10 +35,12 @@ template <typename Dtype>
 void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                  const vector<Blob<Dtype>*>& top) {
   CPGParameter this_layer_param = this->layer_param_.cpg_param();
+  LOG(INFO)<<"type: "<<this->layer_param_.type();
   is_opg_ = this_layer_param.is_cpg();
   is_order_ = this_layer_param.is_order();
   debug_info_ = this_layer_param.debug_info();
   is_contrast_ = this_layer_param.is_contrast();
+  is_softmax_ = this_layer_param.is_softmax();
   predict_threshold_ = this_layer_param.predict_threshold();
   predict_order_ = this_layer_param.predict_order();
   start_layer_name_ = this_layer_param.start_layer_name();

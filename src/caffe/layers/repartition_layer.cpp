@@ -12,6 +12,11 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   CPGParameter this_layer_param = this->layer_param_.cpg_param();
   is_opg_ = this_layer_param.is_cpg();
   debug_info_ = this_layer_param.debug_info();
+  is_crf_ = this_layer_param.is_crf();
+  is_pred_ = this_layer_param.is_pred();
+  is_order_ = this_layer_param.is_order();
+  is_softmax_ = this_layer_param.is_softmax();
+
   predict_threshold_ = this_layer_param.predict_threshold();
   predict_order_ = this_layer_param.predict_order();
   crf_threshold_ = this_layer_param.crf_threshold();
@@ -19,9 +24,6 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   bg_threshold_ = this_layer_param.bg_threshold();
   mass_threshold_ = this_layer_param.mass_threshold();
   density_threshold_ = this_layer_param.density_threshold();
-  is_crf_ = this_layer_param.is_crf();
-  is_pred_ = this_layer_param.is_pred();
-  is_order_ = this_layer_param.is_order();
 
   bottom_opgs_index_ = 0;
   bottom_rois_index_ = 1;
@@ -47,7 +49,7 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     order_K_ = 3;
     order_step_ = 10022 * 3;
     order_threshold_ = 1.0 * (order_K_ - 1) / order_K_;
-    CHECK_EQ(top.size(), 3) << "for size order, #top should be 3";
+    CHECK_EQ(top.size(), 3) << "In size order mode, #top should be 3!";
   }
 
   LOG(INFO) << "----------------------------------------------";
@@ -111,11 +113,23 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   num_im_ = bottom[bottom_label_index_]->num();
   CHECK_EQ(num_im_, 1) << "current only support one image per forward-backward";
 
+  // shape fliter
+  vector<int> fliter_shape;
+  fliter_shape.push_back(num_roi_);
+  fliter_shape.push_back(num_class_);
+  fliter_.Reshape(fliter_shape);
+
   // shape top
-  vector<int> top_shape;
-  top_shape.push_back(num_roi_);
-  top_shape.push_back(num_class_);
-  top[0]->Reshape(top_shape);
+  if (is_softmax_) {
+    vector<int> top_shape;
+    top_shape.push_back(num_roi_);
+    top[0]->Reshape(top_shape);
+  } else {
+    vector<int> top_shape;
+    top_shape.push_back(num_roi_);
+    top_shape.push_back(num_class_);
+    top[0]->Reshape(top_shape);
+  }
 
   if (top.size() == 3) {
     top[1]->CopyFrom(*bottom[bottom_label_index_], false, true);

@@ -1259,6 +1259,7 @@ message CPGParameter {
   optional bool is_contrast = 30 [default = false];
   optional bool is_crf = 55 [default = false];
   optional bool is_pred = 56 [default = false];
+  optional bool is_softmax = 60 [default = false];
   optional bool debug_info = 22 [default = false];
 
   required string start_layer_name = 23 [default = ''];

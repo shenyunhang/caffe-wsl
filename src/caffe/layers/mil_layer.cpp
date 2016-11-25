@@ -1,8 +1,8 @@
 #include <vector>
 
-#include "caffe/filler.hpp"
 #include "caffe/layers/mil_layer.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/layers/opg_layer.hpp"
 
 namespace caffe {
 
@@ -17,24 +17,27 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   bottom_io_index_ = 4;
 
   top_select_index_ = 0;
-  top_poslabel_index_ = 0;
-  top_neglabel_index_ = 0;
-
-  cpg_blob_ = new Blob<Dtype>();
+  top_poslabel_index_ = 1;
+  top_neglabel_index_ = 2;
 
   LayerParameter mil_param(this->layer_param_);
 
+  // TODO(YH): we can directly create new layers without useing registry
+  mil_param.set_type("OPG");
   cpg_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
+  shared_ptr<OPGLayer<Dtype> > cpg_layer__=boost::dynamic_pointer_cast<OPGLayer<Dtype> >(cpg_layer_);
+  cpg_layer__->Set_Net(net_);
   cpg_bottom_vec_.clear();
   cpg_bottom_vec_.push_back(bottom[bottom_label_index_]);
   cpg_bottom_vec_.push_back(bottom[bottom_predict_index_]);
   cpg_top_vec_.clear();
-  cpg_top_vec_.push_back(cpg_blob_);
+  cpg_top_vec_.push_back(&cpg_blob_);
   cpg_layer_->SetUp(cpg_bottom_vec_, cpg_top_vec_);
 
+  mil_param.set_type("Repartition");
   repartition_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
   repartition_bottom_vec_.clear();
-  repartition_bottom_vec_.push_back(cpg_blob_);
+  repartition_bottom_vec_.push_back(&cpg_blob_);
   repartition_bottom_vec_.push_back(bottom[bottom_rois_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_label_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_predict_index_]);
