@@ -65,12 +65,13 @@ class OPGLayer : public Layer<Dtype> {
   bool debug_info_;
   bool is_contrast_;
   bool is_order_;
-  bool is_softmax_;
   float predict_threshold_;
   float predict_order_;
   string start_layer_name_;
   string end_layer_name_;
   vector<string> opg_blob_name_;
+
+  int ignore_label_;
 
   int start_layer_index_;
   int end_layer_index_;

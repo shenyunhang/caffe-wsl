@@ -1262,6 +1262,8 @@ message CPGParameter {
   optional bool is_softmax = 60 [default = false];
   optional bool debug_info = 22 [default = false];
 
+  optional int32 ignore_label = 70 [default = -1];
+
   required string start_layer_name = 23 [default = ''];
   required string end_layer_name = 24 [default = ''];
   repeated string opg_blob_name = 25;

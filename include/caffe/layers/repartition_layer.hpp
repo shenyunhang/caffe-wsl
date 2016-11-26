@@ -70,6 +70,8 @@ class RepartitionLayer : public Layer<Dtype> {
   bool is_order_;
   bool is_softmax_;
 
+  int ignore_label_;
+
   float predict_threshold_;
   float predict_order_;
   float crf_threshold_;

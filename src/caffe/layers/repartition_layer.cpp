@@ -17,6 +17,8 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   is_order_ = this_layer_param.is_order();
   is_softmax_ = this_layer_param.is_softmax();
 
+  ignore_label_ = this_layer_param.ignore_label();
+
   predict_threshold_ = this_layer_param.predict_threshold();
   predict_order_ = this_layer_param.predict_order();
   crf_threshold_ = this_layer_param.crf_threshold();
@@ -102,6 +104,7 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     voc_label_.push_back("sofa");
     voc_label_.push_back("train");
     voc_label_.push_back("tvmonitor");
+    voc_label_.push_back("background");
   }
 }
 

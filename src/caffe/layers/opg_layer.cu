@@ -28,7 +28,8 @@ void OPGLayer<Dtype>::Show_info() {
 
   LOG(INFO) << "==============================================";
   LOG(INFO) << "OPG layer:";
-  LOG(INFO) << "is_opg: " << is_opg_;
+  LOG(INFO) << "is_opg_: " << is_opg_;
+  LOG(INFO) << "ignore_label_: " << ignore_label_;
   LOG(INFO) << "debug_info_: " << debug_info_;
   LOG(INFO) << "is_contrast: " << is_contrast_;
   LOG(INFO) << "predict_threshold_:" << predict_threshold_;
@@ -393,7 +394,7 @@ template <typename Dtype>
 bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
                                        const Dtype predict) {
   // in softmax model, we assume the last class is background
-  if (is_softmax_ && cls_id == num_class_ - 1) return false;
+  if (cls_id == ignore_label_) return false;
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
     if (label <= 0.5) return false;
@@ -426,7 +427,7 @@ bool OPGLayer<Dtype>::Need_Order(const Dtype label, const Dtype predict) {
       return false;
     }
   } else if (this->phase_ == TEST) {
-    return true;
+    return false;
   } else {
     LOG(FATAL) << "unkown phase: " << this->phase_;
   }

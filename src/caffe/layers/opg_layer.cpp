@@ -40,7 +40,7 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   is_order_ = this_layer_param.is_order();
   debug_info_ = this_layer_param.debug_info();
   is_contrast_ = this_layer_param.is_contrast();
-  is_softmax_ = this_layer_param.is_softmax();
+  ignore_label_ = this_layer_param.ignore_label();
   predict_threshold_ = this_layer_param.predict_threshold();
   predict_order_ = this_layer_param.predict_order();
   start_layer_name_ = this_layer_param.start_layer_name();
@@ -139,11 +139,13 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     voc_label_.push_back("sofa");
     voc_label_.push_back("train");
     voc_label_.push_back("tvmonitor");
+    voc_label_.push_back("background");
   }
 
   LOG(INFO) << "==============================================";
   LOG(INFO) << "OPG layer:";
-  LOG(INFO) << "is_opg: " << is_opg_;
+  LOG(INFO) << "is_opg_: " << is_opg_;
+  LOG(INFO) << "ignore_label_: " << ignore_label_;
   LOG(INFO) << "debug_info_: " << debug_info_;
   LOG(INFO) << "is_contrast: " << is_contrast_;
   LOG(INFO) << "predict_threshold_:" << predict_threshold_;

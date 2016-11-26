@@ -41,8 +41,10 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   repartition_bottom_vec_.push_back(bottom[bottom_rois_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_label_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_predict_index_]);
+  if(bottom.size()>bottom_filt_index_){
   repartition_bottom_vec_.push_back(bottom[bottom_filt_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_io_index_]);
+  }
   repartition_top_vec_.clear();
   repartition_top_vec_.push_back(top[0]);
   repartition_layer_->SetUp(repartition_bottom_vec_, repartition_top_vec_);

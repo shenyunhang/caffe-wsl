@@ -15,7 +15,7 @@ template <typename Dtype>
 void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
                Blob<Dtype> *label_blob, const int save_id, const int num_im,
                const int height_im, const int width_im, const bool is_resize,
-               const vector<string> voc_label) {
+               const vector<string> voc_label, const int ignore_label) {
   const int num_roi = rois_blob->num();
   const int num_class = fliter_blob->channels();
   const Dtype *rois = rois_blob->cpu_data();
@@ -38,6 +38,9 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
 
   for (int c = 0; c < num_class; ++c) {
     if (label[c] <= 0.5) {
+      continue;
+    }
+    if (c == ignore_label) {
       continue;
     }
 
@@ -624,8 +627,7 @@ template <typename Dtype>
 bool RepartitionLayer<Dtype>::Need_Repartition(const int cls_id,
                                                const Dtype label,
                                                const Dtype predict) {
-  // in softmax model, we assume the last class is background
-  if (is_softmax_ && cls_id == num_class_ - 1) return false;
+  if (cls_id == ignore_label_) return false;
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
     if (label <= 0.5) return false;
@@ -659,7 +661,7 @@ bool RepartitionLayer<Dtype>::Need_Order(const Dtype label,
       return false;
     }
   } else if (this->phase_ == TEST) {
-    return true;
+    return false;
   } else {
     LOG(FATAL) << "unkown phase: " << this->phase_;
   }
@@ -787,7 +789,12 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         get_num_ob_(raw_opg_->cpu_data(), opg_size_, threshold);
     const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
 
+    LOG_IF(INFO, debug_info_) << "maxval: " << maxval
+                              << " threshold: " << threshold
+                              << " im_mass: " << im_mass
+                              << " im_density: " << im_density;
     if (is_softmax_) {
+      LOG_IF(INFO, debug_info_) << "LabelBBoxes:";
       // NOLINT_NEXT_LINE(whitespace/operators)
       LabelBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
                              CAFFE_CUDA_NUM_THREADS>>>
@@ -797,6 +804,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
            fliter_.mutable_gpu_data());
     } else {
       if (is_pred_) {
+        LOG_IF(INFO, debug_info_) << "ScoreBBoxes:";
         const Dtype min_density = im_density * density_threshold_;
         // NOLINT_NEXT_LINE(whitespace/operators)
         ScoreBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
@@ -805,6 +813,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
              bottom_rois, num_class_, cls_id, threshold, min_density, im_mass,
              fliter_.mutable_gpu_data());
       } else {
+        LOG_IF(INFO, debug_info_) << "WeightBBoxes:";
         // NOLINT_NEXT_LINE(whitespace/operators)
         WeightBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
                                 CAFFE_CUDA_NUM_THREADS>>>
@@ -823,8 +832,8 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     bool is_resize = false;
     if (this->phase_ == TEST) is_resize = true;
     Show_rois(bottom[bottom_rois_index_], &fliter_, bottom[bottom_label_index_],
-              total_im_ - num_im_, num_im_, height_im_, width_im_, is_resize,
-              voc_label_);
+              total_im_, num_im_, height_im_, width_im_, is_resize, voc_label_,
+              ignore_label_);
   }
 
   if (is_softmax_) {
