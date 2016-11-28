@@ -15,7 +15,8 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   is_crf_ = this_layer_param.is_crf();
   is_pred_ = this_layer_param.is_pred();
   is_order_ = this_layer_param.is_order();
-  is_softmax_ = this_layer_param.is_softmax();
+  is_instance_label_ = this_layer_param.is_instance_label();
+  is_instance_softmax_ = this_layer_param.is_instance_softmax();
 
   ignore_label_ = this_layer_param.ignore_label();
 
@@ -123,7 +124,8 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   fliter_.Reshape(fliter_shape);
 
   // shape top
-  if (is_softmax_) {
+  if (is_instance_label_) {
+    CHECK_EQ(top.size(), 1) << "In instance_label mode, only out put one blob.";
     vector<int> top_shape;
     top_shape.push_back(num_roi_);
     top[0]->Reshape(top_shape);
@@ -132,13 +134,15 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
     top_shape.push_back(num_roi_);
     top_shape.push_back(num_class_);
     top[0]->Reshape(top_shape);
+
+    // In test model, the output is one.
+    if (top.size() == 3) {
+      top[1]->CopyFrom(*bottom[bottom_label_index_], false, true);
+      top[2]->ReshapeLike(*bottom[bottom_label_index_]);
+      caffe_set(top[2]->count(), Dtype(0), top[2]->mutable_cpu_data());
+    }
   }
 
-  if (top.size() == 3) {
-    top[1]->CopyFrom(*bottom[bottom_label_index_], false, true);
-    top[2]->ReshapeLike(*bottom[bottom_label_index_]);
-    caffe_set(top[2]->count(), Dtype(0), top[2]->mutable_cpu_data());
-  }
   // shape bboxes_
   vector<int> bboxes_shape;
   bboxes_shape.push_back(max_bb_per_cls_);

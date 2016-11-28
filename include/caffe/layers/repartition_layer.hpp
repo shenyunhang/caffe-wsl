@@ -68,7 +68,8 @@ class RepartitionLayer : public Layer<Dtype> {
   bool is_crf_;
   bool is_pred_;
   bool is_order_;
-  bool is_softmax_;
+  bool is_instance_label_;
+  bool is_instance_softmax_;
 
   int ignore_label_;
 

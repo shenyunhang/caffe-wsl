@@ -1259,7 +1259,8 @@ message CPGParameter {
   optional bool is_contrast = 30 [default = false];
   optional bool is_crf = 55 [default = false];
   optional bool is_pred = 56 [default = false];
-  optional bool is_softmax = 60 [default = false];
+  optional bool is_instance_label = 80 [default = false];
+  optional bool is_instance_softmax = 81 [default = false];
   optional bool debug_info = 22 [default = false];
 
   optional int32 ignore_label = 70 [default = -1];
@@ -1333,6 +1334,7 @@ message GeneralPoolingParameter {
   }
   optional PoolMethod pool = 1 [default = MAX]; // The pooling method
   optional float threshold = 2 [default = 0.0];
+  optional int32 axis = 3 [default = 1];
 }
 
 message SoftmaxTemperatureParameter {
@@ -1407,6 +1409,7 @@ message PolarConstraintParameter {
 message CrossEntropyLossParameter {
   optional uint32 display = 1 [default = 1280];
   optional int32 ignore_label = 2 [default = -1];
+  optional int32 ignore_value = 3 [default = -1];
 }
 
 // DEPRECATED: use LayerParameter.

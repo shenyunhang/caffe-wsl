@@ -37,6 +37,12 @@ class GeneralPoolingLayer : public Layer<Dtype> {
 
   Blob<int> mask_idx_;
   Dtype threshold_;
+
+  int outer_num_;
+  int inner_num_;
+
+  // TODO(YH): cuurent only MAX pooling support axis parameter.
+  int pooling_axis_;
 };
 
 }  // namespace caffe

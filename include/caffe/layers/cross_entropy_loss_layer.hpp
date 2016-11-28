@@ -36,6 +36,7 @@ class CrossEntropyLossLayer : public LossLayer<Dtype> {
 
   int display_;
   int ignore_label_;
+  int ignore_value_;
 
   Dtype total_loss_;
   int total_iter_;

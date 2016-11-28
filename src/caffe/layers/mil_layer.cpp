@@ -25,7 +25,8 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // TODO(YH): we can directly create new layers without useing registry
   mil_param.set_type("OPG");
   cpg_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
-  shared_ptr<OPGLayer<Dtype> > cpg_layer__=boost::dynamic_pointer_cast<OPGLayer<Dtype> >(cpg_layer_);
+  shared_ptr<OPGLayer<Dtype> > cpg_layer__ =
+      boost::dynamic_pointer_cast<OPGLayer<Dtype> >(cpg_layer_);
   cpg_layer__->Set_Net(net_);
   cpg_bottom_vec_.clear();
   cpg_bottom_vec_.push_back(bottom[bottom_label_index_]);
@@ -34,6 +35,7 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   cpg_top_vec_.push_back(&cpg_blob_);
   cpg_layer_->SetUp(cpg_bottom_vec_, cpg_top_vec_);
 
+  // TODO(YH): we can directly create new layers without useing registry
   mil_param.set_type("Repartition");
   repartition_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
   repartition_bottom_vec_.clear();
@@ -41,12 +43,14 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   repartition_bottom_vec_.push_back(bottom[bottom_rois_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_label_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_predict_index_]);
-  if(bottom.size()>bottom_filt_index_){
-  repartition_bottom_vec_.push_back(bottom[bottom_filt_index_]);
-  repartition_bottom_vec_.push_back(bottom[bottom_io_index_]);
+  if (bottom.size() > bottom_filt_index_) {
+    repartition_bottom_vec_.push_back(bottom[bottom_filt_index_]);
+    repartition_bottom_vec_.push_back(bottom[bottom_io_index_]);
   }
   repartition_top_vec_.clear();
-  repartition_top_vec_.push_back(top[0]);
+  for (size_t i = 0; i < top.size(); ++i) {
+    repartition_top_vec_.push_back(top[i]);
+  }
   repartition_layer_->SetUp(repartition_bottom_vec_, repartition_top_vec_);
 }
 

@@ -60,6 +60,9 @@ void GeneralPoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // LOG(INFO) << "INT_MAX: " << INT_MAX;
   // LOG(INFO) << "INT_MIN: " << INT_MIN;
   LOG(INFO) << "----------------------------------------------";
+
+  pooling_axis_ = bottom[0]->CanonicalAxisIndex(
+      this->layer_param_.general_pooling_param().axis());
 }
 
 template <typename Dtype>
@@ -82,16 +85,22 @@ void GeneralPoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   const int num_class = bottom[0]->channels();
   const int num_roi = bottom[0]->num();
-  const int num_im = 1;
+
+  outer_num_ = bottom[0]->count(0, pooling_axis_);
+  inner_num_ = bottom[0]->count(pooling_axis_ + 1);
 
   switch (this->layer_param_.general_pooling_param().pool()) {
     case GeneralPoolingParameter_PoolMethod_MUL:
       top[0]->Reshape(num_roi, num_class, 1, 1);
       break;
     default:
-      top[0]->Reshape(num_im, num_class, 1, 1);
+      vector<int> top_dims = bottom[0]->shape();
+      top_dims[pooling_axis_] = 1;
+      top[0]->Reshape(top_dims);
   }
-  mask_idx_.Reshape(num_im, num_class, 1, 1);
+  vector<int> mask_dims = bottom[0]->shape();
+  mask_dims[pooling_axis_] = 1;
+  mask_idx_.Reshape(mask_dims);
 }
 
 template <typename Dtype>
@@ -176,21 +185,35 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         }
       }
       break;
-    case GeneralPoolingParameter_PoolMethod_SUM:
+    case GeneralPoolingParameter_PoolMethod_SUM: {
       // Initialize
       caffe_set(top_count, Dtype(0), top_data);
 
-      // The main loop
-      for (int n = 0; n < num_im; ++n) {
-        for (int c = 0; c < num_class; ++c) {
-          const int pool_index = n * num_class + c;
-          for (int r = 0; r < num_roi; ++r) {
-            const int index = r * num_class + c;
+      int channels = bottom[0]->shape(pooling_axis_);
+      int dim = bottom[0]->count() / outer_num_;
+
+      for (int i = 0; i < outer_num_; ++i) {
+        for (int k = 0; k < inner_num_; ++k) {
+          int pool_index = i * inner_num_ + k;
+          for (int j = 0; j < channels; ++j) {
+            int index = i * dim + j * inner_num_ + k;
             top_data[pool_index] += bottom_data[index];
           }
         }
       }
-      break;
+
+      // The main loop
+      // for (int n = 0; n < num_im; ++n) {
+      // for (int c = 0; c < num_class; ++c) {
+      // const int pool_index = n * num_class + c;
+      // for (int r = 0; r < num_roi; ++r) {
+      // const int index = r * num_class + c;
+      // top_data[pool_index] += bottom_data[index];
+      //}
+      //}
+      //}
+
+    } break;
     case GeneralPoolingParameter_PoolMethod_MAX:
       // Initialize
       caffe_set(top_count, Dtype(-FLT_MAX), top_data);
@@ -374,18 +397,32 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
         }
       }
       break;
-    case GeneralPoolingParameter_PoolMethod_SUM:
-      // The main loop
-      for (int n = 0; n < num_im; ++n) {
-        for (int c = 0; c < num_class; ++c) {
-          const int pool_index = n * num_class + c;
-          for (int r = 0; r < num_roi; ++r) {
-            const int index = r * num_class + c;
+    case GeneralPoolingParameter_PoolMethod_SUM: {
+      int channels = bottom[0]->shape(pooling_axis_);
+      int dim = bottom[0]->count() / outer_num_;
+
+      for (int i = 0; i < outer_num_; ++i) {
+        for (int k = 0; k < inner_num_; ++k) {
+          int pool_index = i * inner_num_ + k;
+          for (int j = 0; j < channels; ++j) {
+            int index = i * dim + j * inner_num_ + k;
             bottom_diff[index] = top_diff[pool_index];
           }
         }
       }
-      break;
+
+      // The main loop
+      // for (int n = 0; n < num_im; ++n) {
+      // for (int c = 0; c < num_class; ++c) {
+      // const int pool_index = n * num_class + c;
+      // for (int r = 0; r < num_roi; ++r) {
+      // const int index = r * num_class + c;
+      // bottom_diff[index] = top_diff[pool_index];
+      //}
+      //}
+      //}
+
+    } break;
     case GeneralPoolingParameter_PoolMethod_MAX:
       // The main loop
       for (int n = 0; n < num_im; ++n) {

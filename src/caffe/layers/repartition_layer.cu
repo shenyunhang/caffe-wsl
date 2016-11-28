@@ -437,7 +437,7 @@ __global__ void InitFilter_Test(const int count, const Dtype *const label_data,
 template <typename Dtype>
 void RepartitionLayer<Dtype>::InitFilter(const Dtype *const label_gpu_data,
                                          Dtype *const top_gpu_data) {
-  if (is_softmax_) {
+  if (is_instance_label_) {
     caffe_gpu_set(num_roi_ * num_class_, Dtype(-1), top_gpu_data);
   } else if (this->phase_ == TRAIN) {
     caffe_gpu_set(num_roi_ * num_class_, Dtype(1), top_gpu_data);
@@ -565,6 +565,64 @@ __global__ void WeightBBoxes(const int num_roi, const Dtype *const opg_data,
 }
 
 template <typename Dtype>
+__global__ void LabelBBoxes_softmax(
+    const int num_roi, const Dtype *const opg_data, const int num,
+    const int channels, const int height, const int width,
+    const Dtype *const rois_data, const int num_class, const int cls_id,
+    const Dtype threshold, const Dtype min_density, const Dtype min_mass,
+    Dtype *const top_data, const int r = 5) {
+  CUDA_KERNEL_LOOP(index, num_roi) {
+    const int rois_index = index;
+
+    const Dtype *const roi = rois_data + 5 * rois_index;
+    const int wstart = max(int(roi[1]), 0);
+    const int hstart = max(int(roi[2]), 0);
+    const int wend = min(int(roi[3]), width);
+    const int hend = min(int(roi[4]), height);
+
+    /*Dtype sum = 0;*/
+    /*Dtype maxval = -FLT_MAX;*/
+    Dtype mass = 0;
+    for (int c = 0; c < channels; ++c) {
+      const Dtype *gradient = opg_data + c * height * width;
+      for (int h = hstart; h < hend; ++h) {
+        for (int w = wstart; w < wend; ++w) {
+          /*sum += gradient[h * width + w];*/
+          /*sum += exp(max(r * gradient[h * width + w], kLOG_THRESHOLD));*/
+          /*if (maxval < gradient[h * width + w]) {*/
+          /*maxval = gradient[h * width + w];*/
+          /*}*/
+          if (threshold < gradient[h * width + w]) {
+            mass++;
+          }
+        }
+      }
+    }
+    Dtype s = (hend - hstart) * (wend - wstart);
+    Dtype density = 1.0 * mass / s / channels;
+    if (density > min_density && mass > min_mass) {
+      top_data[rois_index * num_class + cls_id] = Dtype(-1);
+    } else {
+      top_data[rois_index * num_class + cls_id] = Dtype(num_class - 1);
+
+      /*if (min_density > 0 && min_mass > 0)*/
+      /*top_data[rois_index * num_class + label] =*/
+      /*density / min_density + mass / min_mass;*/
+      /*else if (min_density > 0)*/
+      /*top_data[rois_index * num_class + label] = density / min_density;*/
+      /*else*/
+      /*top_data[rois_index * num_class + label] = mass / min_mass;*/
+    }
+    /*top_data[rois_index * num_class + label] =*/
+    /*sum / (hend - hstart) / (wend - wstart);*/
+    /*top_data[rois_index * num_class + label] = sum;*/
+    /*top_data[rois_index * num_class + label] =*/
+    /*log(sum / (hend - hstart) / (wend - wstart)) / r;*/
+    /*top_data[rois_index * num_class + label] = maxval;*/
+  }
+}
+
+template <typename Dtype>
 __global__ void LabelBBoxes(const int num_roi, const Dtype *const opg_data,
                             const int num, const int channels, const int height,
                             const int width, const Dtype *const rois_data,
@@ -604,7 +662,7 @@ __global__ void LabelBBoxes(const int num_roi, const Dtype *const opg_data,
     if (density > min_density && mass > min_mass) {
       top_data[rois_index * num_class + cls_id] = Dtype(-1);
     } else {
-      top_data[rois_index * num_class + cls_id] = Dtype(num_class - 1);
+      top_data[rois_index * num_class + cls_id] = Dtype(0);
 
       /*if (min_density > 0 && min_mass > 0)*/
       /*top_data[rois_index * num_class + label] =*/
@@ -793,15 +851,18 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                               << " threshold: " << threshold
                               << " im_mass: " << im_mass
                               << " im_density: " << im_density;
-    if (is_softmax_) {
-      LOG_IF(INFO, debug_info_) << "LabelBBoxes:";
-      // NOLINT_NEXT_LINE(whitespace/operators)
-      LabelBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
-                             CAFFE_CUDA_NUM_THREADS>>>
-          (num_roi_, raw_opg_->gpu_data(), 1, 1, height_im_, width_im_,
-           bottom_rois, num_class_, cls_id, threshold,
-           im_density * density_threshold_, im_mass * mass_threshold_,
-           fliter_.mutable_gpu_data());
+    if (is_instance_label_) {
+      if (is_instance_softmax_) {
+        LOG_IF(INFO, debug_info_) << "LabelBBoxes:";
+        // NOLINT_NEXT_LINE(whitespace/operators)
+        LabelBBoxes_softmax<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
+                                       CAFFE_CUDA_NUM_THREADS>>>
+            (num_roi_, raw_opg_->gpu_data(), 1, 1, height_im_, width_im_,
+             bottom_rois, num_class_, cls_id, threshold,
+             im_density * density_threshold_, im_mass * mass_threshold_,
+             fliter_.mutable_gpu_data());
+      } else {
+      }
     } else {
       if (is_pred_) {
         LOG_IF(INFO, debug_info_) << "ScoreBBoxes:";
@@ -836,42 +897,89 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
               ignore_label_);
   }
 
-  if (is_softmax_) {
-    caffe_set(num_roi_, Dtype(num_class_), top[0]->mutable_cpu_data());
-    Dtype *softmax_data = top[0]->mutable_cpu_data();
-    const Dtype *fliter_data = fliter_.cpu_data();
-    for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
-      int index = cls_id;
-      if (Need_Repartition(cls_id, bottom_label[index],
-                           bottom_predict[index])) {
-      } else {
-        continue;
-      }
-      for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
-        Dtype f1 = softmax_data[roi_id];
-        Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
-
-        if (f1 == num_class_) {
-          if (f2 == num_class_) {
-            softmax_data[roi_id] = num_class_;
-          } else if (f2 == -1) {
-            softmax_data[roi_id] = -1;
-          } else {
-            softmax_data[roi_id] = f2;
-          }
-        } else if (f1 == -1) {
-          if (f2 == num_class_) {
-            softmax_data[roi_id] = -1;
-          } else if (f2 == -1) {
-            softmax_data[roi_id] = -1;
-          } else {
-            softmax_data[roi_id] = f2;
-          }
+  if (is_instance_label_) {
+    if (is_instance_softmax_) {
+      caffe_set(num_roi_, Dtype(num_class_), top[0]->mutable_cpu_data());
+      Dtype *instance_label_data = top[0]->mutable_cpu_data();
+      const Dtype *fliter_data = fliter_.cpu_data();
+      for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
+        int index = cls_id;
+        if (Need_Repartition(cls_id, bottom_label[index],
+                             bottom_predict[index])) {
         } else {
-          if (f2 == num_class_) {
-          } else if (f2 == -1) {
+          continue;
+        }
+        for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
+          Dtype f1 = instance_label_data[roi_id];
+          Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
+
+          if (f1 == num_class_) {
+            if (f2 == num_class_) {
+              instance_label_data[roi_id] = num_class_;
+            } else if (f2 == -1) {
+              instance_label_data[roi_id] = -1;
+            } else {
+              instance_label_data[roi_id] = f2;
+            }
+          } else if (f1 == -1) {
+            if (f2 == num_class_) {
+              instance_label_data[roi_id] = -1;
+            } else if (f2 == -1) {
+              instance_label_data[roi_id] = -1;
+            } else {
+              instance_label_data[roi_id] = f2;
+            }
           } else {
-            softmax_data[roi_id] = -1;
+            if (f2 == num_class_) {
+            } else if (f2 == -1) {
+            } else {
+              instance_label_data[roi_id] = -1;
+            }
+          }
+        }
+      }
+    } else {
+      caffe_set(num_roi_, Dtype(-1), top[0]->mutable_cpu_data());
+      Dtype *instance_label_data = top[0]->mutable_cpu_data();
+      const Dtype *fliter_data = fliter_.cpu_data();
+      for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
+        int index = cls_id;
+        if (Need_Repartition(cls_id, bottom_label[index],
+                             bottom_predict[index])) {
+        } else {
+          continue;
+        }
+        for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
+          Dtype f1 = instance_label_data[roi_id];
+          Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
+
+          if (f1 == 0) {
+            if (f2 == 0) {
+            } else if (f2 == -1) {
+              instance_label_data[roi_id] = -1;
+            } else if (f2 == 1) {
+              instance_label_data[roi_id] = 1;
+            } else {
+              LOG(FATAL) << "we should not be here";
+            }
+          } else if (f1 == -1) {
+            if (f2 == 0) {
+            } else if (f2 == -1) {
+            } else if (f2 == 1) {
+              instance_label_data[roi_id] = 1;
+            } else {
+              LOG(FATAL) << "we should not be here";
+            }
+          } else if (f1 == 1) {
+            if (f2 == 0) {
+            } else if (f2 == -1) {
+            } else if (f2 == 1) {
+              instance_label_data[roi_id] = -1;
+            } else {
+              LOG(FATAL) << "we should not be here";
+            }
+          } else {
+            LOG(FATAL) << "we should not be here";
           }
         }
       }
@@ -900,12 +1008,18 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   }
   //-----------------------------------------------------------------------
   int roi_left = 0;
-  if (is_softmax_) {
-    const Dtype *softmax_data = top[0]->cpu_data();
-    for (int i = 0; i < top[0]->count(); ++i) {
-      if (softmax_data[i] == num_class_ - 1) roi_left++;
+  if (is_instance_label_) {
+    if (is_instance_softmax_) {
+      const Dtype *instance_label_data = top[0]->cpu_data();
+      for (int i = 0; i < top[0]->count(); ++i) {
+        if (instance_label_data[i] <= num_class_ - 1) roi_left++;
+      }
+    } else {
+      const Dtype *instance_label_data = top[0]->cpu_data();
+      for (int i = 0; i < top[0]->count(); ++i) {
+        if (instance_label_data[i] == 1) roi_left++;
+      }
     }
-
   } else {
     roi_left = fliter_.asum_data() - (num_class_ - gt_num) * num_roi_;
   }

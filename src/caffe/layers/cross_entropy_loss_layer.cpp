@@ -14,6 +14,7 @@ void CrossEntropyLossLayer<Dtype>::LayerSetUp(
       this->layer_param_.cross_entropy_loss_param();
   display_ = this_layer_param.display();
   ignore_label_ = this_layer_param.ignore_label();
+  ignore_value_ = this_layer_param.ignore_value();
 
   total_loss_ = 0;
   total_iter_ = 0;
@@ -39,23 +40,18 @@ void CrossEntropyLossLayer<Dtype>::Forward_cpu(
   const Dtype* target = bottom[1]->cpu_data();
 
   Dtype loss = 0;
-  if (ignore_label_ >= 0) {
-    for (int i = 0; i < count_; ++i) {
-      if (i % num_class_ == ignore_label_) continue;
-      Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
-      Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
-      loss -= (target[i] * log(prob) + (1 - target[i]) * log(one_prob));
+  for (int i = 0; i < count_; ++i) {
+    if (target[i] == ignore_value_) {
+      total_ignore_num_++;
+      continue;
     }
-  } else {
-    for (int i = 0; i < count_; ++i) {
-      if (target[i] == -1) {
-        total_ignore_num_++;
-        continue;
-      }
-      Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
-      Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
-      loss -= (target[i] * log(prob) + (1 - target[i]) * log(one_prob));
+    if (i % num_class_ == ignore_label_) {
+      total_ignore_num_++;
+      continue;
     }
+    Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
+    Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
+    loss -= (target[i] * log(prob) + (1 - target[i]) * log(one_prob));
   }
   top[0]->mutable_cpu_data()[0] = loss / num_im_;
 
@@ -63,8 +59,7 @@ void CrossEntropyLossLayer<Dtype>::Forward_cpu(
   total_iter_++;
   if (total_iter_ % display_ == 0) {
     LOG(INFO) << this->layer_param().name() << " #iter_: " << total_iter_
-              << " #ignore: " << total_ignore_num_
-              << " #loss_: " << total_loss_
+              << " #ignore: " << total_ignore_num_ << " #loss_: " << total_loss_
               << " AVE loss: " << total_loss_ / total_iter_;
     total_loss_ = 0;
     total_iter_ = 0;
@@ -88,30 +83,20 @@ void CrossEntropyLossLayer<Dtype>::Backward_cpu(
   const Dtype* target = bottom[1]->cpu_data();
   const Dtype scale = top[0]->cpu_diff()[0] / num_im_;
   Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
-  if (ignore_label_ >= 0) {
-    for (int i = 0; i < count_; ++i) {
-      if (i % num_class_ == ignore_label_) {
-        bottom_diff[i] = 0;
-        continue;
-      }
-      Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
-      Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
-      bottom_diff[i] = std::min(
-          scale * (-1 * target[i] / prob - (-1) * (1 - target[i]) / one_prob),
-          Dtype(kDIFF_THRESHOLD));
+  for (int i = 0; i < count_; ++i) {
+    if (i % num_class_ == ignore_label_) {
+      bottom_diff[i] = 0;
+      continue;
     }
-  } else {
-    for (int i = 0; i < count_; ++i) {
-      if (target[i] == -1) {
-        bottom_diff[i] = 0;
-        continue;
-      }
-      Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
-      Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
-      bottom_diff[i] = std::min(
-          scale * (-1 * target[i] / prob - (-1) * (1 - target[i]) / one_prob),
-          Dtype(kDIFF_THRESHOLD));
+    if (target[i] == ignore_value_) {
+      bottom_diff[i] = 0;
+      continue;
     }
+    Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
+    Dtype one_prob = std::max(1 - input_data[i], Dtype(kLOG_THRESHOLD));
+    bottom_diff[i] = std::min(
+        scale * (-1 * target[i] / prob - (-1) * (1 - target[i]) / one_prob),
+        Dtype(kDIFF_THRESHOLD));
   }
 }
 
