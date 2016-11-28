@@ -213,6 +213,8 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       //}
       //}
 
+      //LOG(INFO)<<"top: "<<top[0]->asum_data();
+
     } break;
     case GeneralPoolingParameter_PoolMethod_MAX:
       // Initialize

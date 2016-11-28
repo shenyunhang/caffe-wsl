@@ -769,6 +769,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
              fliter_.mutable_gpu_data());
 
   if (!is_opg_) {
+    top[0]->CopyFrom(fliter_, false, false);
     return;
   }
 
@@ -1028,6 +1029,8 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   accum_label_ += gt_num;
   accum_roi_l_ += roi_left;
   After();
+
+  LOG_IF(INFO, debug_info_) << "top: " << top[0]->asum_data();
 }
 
 template <typename Dtype>
