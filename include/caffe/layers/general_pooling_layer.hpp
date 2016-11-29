@@ -41,7 +41,7 @@ class GeneralPoolingLayer : public Layer<Dtype> {
   int outer_num_;
   int inner_num_;
 
-  // TODO(YH): cuurent only MAX pooling support axis parameter.
+  // TODO(YH): cuurent only MAX and MAX pooling support axis parameter.
   int pooling_axis_;
 };
 

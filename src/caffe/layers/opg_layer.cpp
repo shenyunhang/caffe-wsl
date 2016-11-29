@@ -35,7 +35,7 @@ template <typename Dtype>
 void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                  const vector<Blob<Dtype>*>& top) {
   CPGParameter this_layer_param = this->layer_param_.cpg_param();
-  LOG(INFO)<<"type: "<<this->layer_param_.type();
+  LOG(INFO) << "type: " << this->layer_param_.type();
   is_opg_ = this_layer_param.is_cpg();
   is_order_ = this_layer_param.is_order();
   debug_info_ = this_layer_param.debug_info();
@@ -195,6 +195,18 @@ void OPGLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                                    const vector<bool>& propagate_down,
                                    const vector<Blob<Dtype>*>& bottom) {
   NOT_IMPLEMENTED;
+}
+
+template <typename Dtype>
+void OPGLayer<Dtype>::After() {
+  accum_im_ += num_im_;
+  accum_gt_ += gt_class_.size();
+  accum_bp_ += bp_class_.size();
+  if (accum_im_ == 1280) {
+    LOG(INFO) << "#im: " << accum_im_ << " #bp: " << accum_bp_ << " #gt"
+              << accum_gt_;
+  }
+  save_id_+=num_im_;
 }
 
 #ifdef CPU_ONLY

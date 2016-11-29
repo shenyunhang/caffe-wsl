@@ -5,6 +5,7 @@
 #include "caffe/util/interp.hpp"
 #include "caffe/util/io.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/util/more_math_functions.hpp"
 
 namespace caffe {
 
@@ -59,6 +60,7 @@ void OPGLayer<Dtype>::Show_info() {
   LOG(INFO) << "==============================================";
 }
 
+// DEPRECATED. As OPG_back function will not change the diff of param now.
 template <typename Dtype>
 void OPGLayer<Dtype>::Save_param_diff() {
   if (this->phase_ == TEST) return;
@@ -150,6 +152,7 @@ void OPGLayer<Dtype>::Save_param_diff() {
   is_history_init_ = true;
 }
 
+// DEPRECATED. As OPG_back function will not change the diff of param now.
 template <typename Dtype>
 void OPGLayer<Dtype>::Restore_param_diff() {
   if (this->phase_ == TEST) return;
@@ -207,21 +210,8 @@ template <typename Dtype>
 void Show_blob(const Dtype *data, const int channels, const int height,
                const int width, const string save_opg_path,
                const float threshold, const int fill = 0) {
-  Dtype maxval = -FLT_MAX;
-  Dtype sum = 0;
-  for (int c = 0; c < channels; c++) {
-    for (int h = 0; h < height; h++) {
-      for (int w = 0; w < width; w++) {
-        int index = (c * height + h) * width + w;
-        /*Dtype value = abs(data[index]);*/
-        Dtype value = data[index] > 0 ? data[index] : 0;
-        if (value > maxval) {
-          maxval = value;
-        }
-        sum += value;
-      }
-    }
-  }
+  Dtype maxval = caffe_cpu_max_element(channels * height * width, data);
+  Dtype sum = caffe_cpu_sum(channels * height * width, data);
   Dtype raw_mean = sum / channels / height / width;
   Dtype raw_maxval = maxval;
 
@@ -267,24 +257,24 @@ void Show_blob(const Dtype *data, const int channels, const int height,
   }
 
   cv::imwrite(save_opg_path, opg_mat);
-  LOG(INFO) << "threshold: " << threshold << "\traw_maxval: " << raw_maxval
+  LOG(INFO) << "threshold: " << threshold << " raw_maxval: " << raw_maxval
             << " raw_mean: " << raw_mean << " max_value: " << maxval
             << " mean: " << sum / channels / height / width;
 
   //-----------------------------------------------------------------------
-  /*const Dtype* opg_cpu=opg_blob->cpu_data();*/
-  /*int total[26];*/
-  /*for(int i=0;i<26;++i){*/
-  /*total[i]=0;*/
-  /*}*/
-  /*for(int e=0;e<opg_blob->count();e++){*/
-  /*int level=int(opg_cpu[e]/10);*/
-  /*total[level]++;*/
-  /*}*/
-  /*for(int i=0;i<26;++i){*/
-  /*std::cout << i<<":"<<total[i]<<" ";*/
-  /*}*/
-  /*std::cout<<std::endl;*/
+  // show the distubution of opg_blob data
+  int total[26];
+  for (int i = 0; i < 26; ++i) {
+    total[i] = 0;
+  }
+  for (int e = 0; e < channels * height * width; e++) {
+    int level = int(data[e] / 10);
+    total[level]++;
+  }
+  for (int i = 0; i < 26; ++i) {
+    std::cout << i << ":" << total[i] << " ";
+  }
+  std::cout << std::endl;
   //-----------------------------------------------------------------------
 }
 
@@ -292,30 +282,6 @@ template <typename Dtype>
 void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
                                const string info) {
   LOG(INFO) << "label: " << current_label << " info: " << info;
-
-  //-----------------------------------------------------------------------
-  // save bboxes
-  /*stringstream load_path;*/
-  /*load_path << "tmp/" << save_id_this_ + n << "_.png";*/
-  /*cv::Mat im_mat = cv::imread(load_path.str());*/
-
-  /*if (this->phase_ == TEST) {*/
-  /*cv::resize(im_mat, im_mat, cv::Size(width_im_, height_im_));*/
-  /*}*/
-
-  /*for (int b = 0; b < bboxes_->num(); ++b) {*/
-  /*const Dtype *bbox = bboxes_->cpu_data() + bboxes_->offset(b);*/
-  /*if (bbox[0] != n) continue;*/
-  /*cv::rectangle(im_mat, cv::Point(bbox[1], bbox[2]),*/
-  /*cv::Point(bbox[3], bbox[4]), cv::Scalar(0, 0, 255));*/
-  /*}*/
-  /*stringstream save_bb_path;*/
-  /*save_bb_path << "tmp/" << save_id_this_ + n << "_" << voc_label_[label] <<
-   * "_bbox.png";*/
-  /*cv::imwrite(save_bb_path.str(), im_mat);*/
-
-  //-----------------------------------------------------------------------
-  // save OPG
   // string save_subdir = currentDateTime();
   string save_subdir = "";
   stringstream save_opg_path;
@@ -344,8 +310,6 @@ void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
     Show_blob(opg_data, channels_opg_, height_im_, width_im_,
               save_opg_path2.str(), pow(10, -t));
   }
-
-  //-----------------------------------------------------------------------
 }
 
 template <typename Dtype>
@@ -479,35 +443,11 @@ void OPGLayer<Dtype>::OPG_back() {
 }
 
 template <typename Dtype>
-__global__ void Maximum(const int count, Dtype *const data, const int stride,
-                        const int all_count) {
-  CUDA_KERNEL_LOOP(index, count) {
-    for (int i = index; i < all_count; i += stride) {
-      if (data[index] < data[i]) {
-        data[index] = data[i];
-      }
-    }
-  }
-}
-
-template <typename Dtype>
 __global__ void Do_threshold(const int count, Dtype *const data,
                              const Dtype thr, const Dtype rep) {
   CUDA_KERNEL_LOOP(index, count) {
     if (data[index] < thr) data[index] = rep;
   }
-}
-
-template <typename Dtype>
-Dtype max_element_(const Dtype *in, const int count) {
-  Dtype max_value = -FLT_MAX;
-  for (int i = 0; i < count; ++i) {
-    if (max_value < (*in)) {
-      max_value = (*in);
-    }
-    ++in;
-  }
-  return max_value;
 }
 
 template <typename Dtype>
@@ -543,51 +483,52 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   const Dtype *bottom_label = bottom[bottom_label_index_]->cpu_data();
   const Dtype *predict_data = predict_blob_->cpu_data();
 
-  vector<int> bp_class;
-  vector<int> gt_class;
+  bp_class_.clear();
+  gt_class_.clear();
   for (int i = 0; i < num_class_; ++i) {
     int index = i;
-    if (Need_Repartition(i,bottom_label[index], predict_data[index])) {
+    if (Need_Repartition(i, bottom_label[index], predict_data[index])) {
     } else if (Need_Order(bottom_label[index], predict_data[index])) {
     } else {
       continue;
     }
-    bp_class.push_back(i);
-    gt_class.push_back(i);
+    bp_class_.push_back(i);
+    gt_class_.push_back(i);
     LOG_IF(INFO, debug_info_) << "gt class: " << voc_label_[i];
   }
-  if (gt_class.size() == 0) {
-    save_id_ += num_im_;
+  if (gt_class_.size() == 0) {
+    After();
     return;
   }
 
-  int num_gt = gt_class.size();
+  int num_gt = gt_class_.size();
   int num_bp;
   if (is_contrast_) {
     num_bp = num_gt > 3 ? num_gt : 3;
-  } else {
-    num_bp = num_gt;
-  }
-
-  while (bp_class.size() < num_bp) {
-    Dtype max_score = -FLT_MAX;
-    int max_id = -1;
-    for (int i = 0; i < num_class_; ++i) {
-      if (std::find(bp_class.begin(), bp_class.end(), i) != bp_class.end()) {
-        /* v contains x */
-        continue;
-      } else {
-        /* v does not contain x */
-        int index = i;
-        if (predict_data[index] > max_score) {
-          max_id = i;
-          max_score = predict_data[index];
+    while (bp_class_.size() < num_bp) {
+      Dtype max_score = -FLT_MAX;
+      int max_id = -1;
+      for (int i = 0; i < num_class_; ++i) {
+        if (std::find(bp_class_.begin(), bp_class_.end(), i) !=
+            bp_class_.end()) {
+          /* v contains x */
+          continue;
+        } else {
+          /* v does not contain x */
+          int index = i;
+          if (predict_data[index] > max_score) {
+            max_id = i;
+            max_score = predict_data[index];
+          }
         }
       }
+      CHECK_NE(max_id, -1) << "max_id can not be -1";
+      bp_class_.push_back(max_id);
+      LOG_IF(INFO, debug_info_) << "addition class: " << voc_label_[max_id];
     }
-    CHECK_NE(max_id, -1) << "max_id can not be -1";
-    bp_class.push_back(max_id);
-    LOG_IF(INFO, debug_info_) << "addition class: " << voc_label_[max_id];
+
+  } else {
+    num_bp = num_gt;
   }
 
   // reshape top
@@ -608,9 +549,9 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   //-----------------------------------------------------------------------
   // me back
   //-----------------------------------------------------------------------
-  for (size_t bp_id = 0; bp_id < bp_class.size(); ++bp_id) {
-    int index = bp_class[bp_id];
-    LOG_IF(INFO, debug_info_) << "class: " << voc_label_[bp_class[bp_id]]
+  for (size_t bp_id = 0; bp_id < bp_class_.size(); ++bp_id) {
+    int index = bp_class_[bp_id];
+    LOG_IF(INFO, debug_info_) << "class: " << voc_label_[bp_class_[bp_id]]
                               << " label: " << bottom_label[index]
                               << " score: " << predict_data[index];
 
@@ -627,6 +568,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     } else {
     }
 
+    // TODO(YH): those code should update if we need CPG in testing.
     // if test, we always try find cache first
     if (this->phase_ == TEST && false) {
       bool is_back = false;
@@ -636,7 +578,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
         cache_path.str(string());
         cache_path << "data/opg_cache_test/" << save_id_ << "_"
-                   << bp_class[bp_id] << "_" << opg_blob_name_[blob_id];
+                   << bp_class_[bp_id] << "_" << opg_blob_name_[blob_id];
 
         if (boost::filesystem::exists(cache_path.str())) {
           ReadProtoFromBinaryFileOrDie(cache_path.str(), &cache_proto);
@@ -655,7 +597,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
           cache_path.str(string());
           cache_path << "data/opg_cache_test/" << save_id_ << "_"
-                     << bp_class[bp_id] << "_" << opg_blob_name_[blob_id];
+                     << bp_class_[bp_id] << "_" << opg_blob_name_[blob_id];
 
           cache_blob.ReshapeLike(*opg_blob_[blob_id]);
           caffe_copy(opg_blob_[blob_id]->count(),
@@ -673,11 +615,9 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
       const int channel_size =
           opg_blob_[blob_id]->shape(2) * opg_blob_[blob_id]->shape(3);
-      // NOLINT_NEXT_LINE(whitespace/operators)
-      Maximum<Dtype> << <CAFFE_GET_BLOCKS(channel_size),
-                         CAFFE_CUDA_NUM_THREADS>>>
-          (channel_size, opg_blob_[blob_id]->mutable_gpu_diff(), channel_size,
-           opg_blob_[blob_id]->count());
+      caffe_gpu_maximum(channel_size, opg_blob_[blob_id]->gpu_diff(),
+                        opg_blob_[blob_id]->mutable_gpu_diff(), channel_size,
+                        opg_blob_[blob_id]->count());
 
       // copy
       if (is_contrast_) {
@@ -693,8 +633,8 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   }
 
   if (is_contrast_) {
-    for (size_t gt_id = 0; gt_id < gt_class.size(); ++gt_id) {
-      for (size_t bp_id = 0; bp_id < bp_class.size(); ++bp_id) {
+    for (size_t gt_id = 0; gt_id < gt_class_.size(); ++gt_id) {
+      for (size_t bp_id = 0; bp_id < bp_class_.size(); ++bp_id) {
         if (gt_id == bp_id) continue;
         for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
           const int channel_size =
@@ -725,48 +665,55 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     }
   }
 
-  for (size_t gt_id = 0; gt_id < gt_class.size(); ++gt_id) {
-    // resize to image size and average
-    // from opg_blob_ diff to data
-    for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
-      if (opg_blob_[blob_id]->shape(2) == height_im_ &&
-          opg_blob_[blob_id]->shape(3) == width_im_) {
-        caffe_copy(opg_size_, raw_opg_->gpu_diff() +
-                                  raw_opg_->offset(gt_id, blob_id, 0, 0),
-                   raw_opg_->mutable_gpu_data() +
-                       raw_opg_->offset(gt_id, blob_id, 0, 0));
-      } else {
-        caffe_gpu_interp2<Dtype, false>(
-            1, raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, blob_id, 0, 0), 0,
-            0, opg_blob_[blob_id]->shape(2), opg_blob_[blob_id]->shape(3),
-            opg_blob_[blob_id]->shape(2), opg_blob_[blob_id]->shape(3),
-            raw_opg_->mutable_gpu_data() +
-                raw_opg_->offset(gt_id, blob_id, 0, 0),
-            0, 0, height_im_, width_im_, height_im_, width_im_);
-      }
-
-      Dtype maxval = max_element_(
-          raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-          opg_size_);
-
-      caffe_gpu_scal(opg_size_, Dtype(1.0 / maxval),
+  for (size_t gt_id = 0; gt_id < gt_class_.size(); ++gt_id) {
+    if (opg_blob_.size() == 1 && opg_blob_[0]->shape(2) == height_im_ &&
+        opg_blob_[0]->shape(3) == width_im_) {
+      caffe_copy(opg_size_,
+                 raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, 0, 0, 0),
+                 top[0]->mutable_gpu_data() + top[0]->offset(gt_id, 0, 0, 0));
+    } else {
+      // resize to image size and average
+      // from opg_blob_ diff to data
+      for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
+        if (opg_blob_[blob_id]->shape(2) == height_im_ &&
+            opg_blob_[blob_id]->shape(3) == width_im_) {
+          caffe_copy(opg_size_, raw_opg_->gpu_diff() +
+                                    raw_opg_->offset(gt_id, blob_id, 0, 0),
                      raw_opg_->mutable_gpu_data() +
                          raw_opg_->offset(gt_id, blob_id, 0, 0));
+        } else {
+          caffe_gpu_interp2<Dtype, false>(
+              1, raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, blob_id, 0, 0),
+              0, 0, opg_blob_[blob_id]->shape(2), opg_blob_[blob_id]->shape(3),
+              opg_blob_[blob_id]->shape(2), opg_blob_[blob_id]->shape(3),
+              raw_opg_->mutable_gpu_data() +
+                  raw_opg_->offset(gt_id, blob_id, 0, 0),
+              0, 0, height_im_, width_im_, height_im_, width_im_);
+        }
 
-      caffe_gpu_add(
-          opg_size_, top[0]->gpu_data() + top[0]->offset(gt_id, 0, 0, 0),
-          raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-          top[0]->mutable_gpu_data() + top[0]->offset(gt_id, 0, 0, 0));
+        Dtype maxval = caffe_cpu_max_element(
+            opg_size_,
+            raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0));
 
-      if (debug_info_) {
-        Show_opg(raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-                 gt_class[gt_id], "_" + opg_blob_name_[blob_id]);
+        caffe_gpu_scal(opg_size_, Dtype(1.0 / maxval),
+                       raw_opg_->mutable_gpu_data() +
+                           raw_opg_->offset(gt_id, blob_id, 0, 0));
+
+        caffe_gpu_add(
+            opg_size_, top[0]->gpu_data() + top[0]->offset(gt_id, 0, 0, 0),
+            raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
+            top[0]->mutable_gpu_data() + top[0]->offset(gt_id, 0, 0, 0));
+        if (debug_info_) {
+          Show_opg(
+              raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
+              gt_class_[gt_id], "_" + opg_blob_name_[blob_id]);
+        }
       }
     }
 
     if (debug_info_) {
       Show_opg(top[0]->cpu_data() + top[0]->offset(gt_id, 0, 0, 0),
-               gt_class[gt_id], "_fusion");
+               gt_class_[gt_id], "_fusion");
     }
 
     /*//-----------------------------------------------------------------------*/
@@ -777,7 +724,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   //-----------------------------------------------------------------------
   /*Restore_param_diff();*/
 
-  save_id_ += num_im_;
+  After();
 }
 
 template <typename Dtype>

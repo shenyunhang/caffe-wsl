@@ -22,8 +22,23 @@ Dtype caffe_cpu_max_element(const int N, const Dtype *x) {
   return max_val;
 }
 
+template int caffe_cpu_max_element<int>(const int N, const int *x);
 template float caffe_cpu_max_element<float>(const int N, const float *x);
 template double caffe_cpu_max_element<double>(const int N, const double *x);
+
+template <typename Dtype>
+Dtype caffe_cpu_sum(const int N, const Dtype *x) {
+  Dtype sum = (*x);
+  for (int i = 1; i < N; ++i) {
+    ++x;
+    sum+=(*x);
+  }
+  return sum;
+}
+
+template int caffe_cpu_sum<int>(const int N, const int *x);
+template float caffe_cpu_sum<float>(const int N, const float *x);
+template double caffe_cpu_sum<double>(const int N, const double *x);
 
 /**
 Warning: the diff of cpg_blob will be modified!

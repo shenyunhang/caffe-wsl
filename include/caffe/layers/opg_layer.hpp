@@ -37,8 +37,11 @@ class OPGLayer : public Layer<Dtype> {
 
   void OPG_back();
 
+  // DEPRECATED. As OPG_back function will not change the diff of param now.
   void Save_param_diff();
+  // DEPRECATED. As OPG_back function will not change the diff of param now.
   void Restore_param_diff();
+
   void Show_info();
   void BackwardDebugInfo(const int layer_id);
   void Clear_split_diff();
@@ -46,6 +49,7 @@ class OPGLayer : public Layer<Dtype> {
   void Show_opg(const Dtype* opg_data, const int cur, const string info = "");
   bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
   bool Need_Order(const Dtype label, const Dtype score);
+  void After();
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -107,6 +111,13 @@ class OPGLayer : public Layer<Dtype> {
   int channels_im_;
   int channels_opg_;
   int opg_size_;
+
+  vector<int> bp_class_;
+  vector<int> gt_class_;
+
+  int accum_im_;
+  int accum_bp_;
+  int accum_gt_;
 
   vector<string> voc_label_;
 };

@@ -522,18 +522,11 @@ __global__ void WeightBBoxes(const int num_roi, const Dtype *const opg_data,
     const int wend = min(int(roi[3]), width);
     const int hend = min(int(roi[4]), height);
 
-    /*Dtype sum = 0;*/
-    /*Dtype maxval = -FLT_MAX;*/
     Dtype mass = 0;
     for (int c = 0; c < channels; ++c) {
       const Dtype *gradient = opg_data + c * height * width;
       for (int h = hstart; h < hend; ++h) {
         for (int w = wstart; w < wend; ++w) {
-          /*sum += gradient[h * width + w];*/
-          /*sum += exp(max(r * gradient[h * width + w], kLOG_THRESHOLD));*/
-          /*if (maxval < gradient[h * width + w]) {*/
-          /*maxval = gradient[h * width + w];*/
-          /*}*/
           if (threshold < gradient[h * width + w]) {
             mass++;
           }
@@ -547,20 +540,7 @@ __global__ void WeightBBoxes(const int num_roi, const Dtype *const opg_data,
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(0);
 
-      /*if (min_density > 0 && min_mass > 0)*/
-      /*top_data[rois_index * num_class + label] =*/
-      /*density / min_density + mass / min_mass;*/
-      /*else if (min_density > 0)*/
-      /*top_data[rois_index * num_class + label] = density / min_density;*/
-      /*else*/
-      /*top_data[rois_index * num_class + label] = mass / min_mass;*/
     }
-    /*top_data[rois_index * num_class + label] =*/
-    /*sum / (hend - hstart) / (wend - wstart);*/
-    /*top_data[rois_index * num_class + label] = sum;*/
-    /*top_data[rois_index * num_class + label] =*/
-    /*log(sum / (hend - hstart) / (wend - wstart)) / r;*/
-    /*top_data[rois_index * num_class + label] = maxval;*/
   }
 }
 
@@ -580,18 +560,11 @@ __global__ void LabelBBoxes_softmax(
     const int wend = min(int(roi[3]), width);
     const int hend = min(int(roi[4]), height);
 
-    /*Dtype sum = 0;*/
-    /*Dtype maxval = -FLT_MAX;*/
     Dtype mass = 0;
     for (int c = 0; c < channels; ++c) {
       const Dtype *gradient = opg_data + c * height * width;
       for (int h = hstart; h < hend; ++h) {
         for (int w = wstart; w < wend; ++w) {
-          /*sum += gradient[h * width + w];*/
-          /*sum += exp(max(r * gradient[h * width + w], kLOG_THRESHOLD));*/
-          /*if (maxval < gradient[h * width + w]) {*/
-          /*maxval = gradient[h * width + w];*/
-          /*}*/
           if (threshold < gradient[h * width + w]) {
             mass++;
           }
@@ -604,21 +577,7 @@ __global__ void LabelBBoxes_softmax(
       top_data[rois_index * num_class + cls_id] = Dtype(-1);
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(num_class - 1);
-
-      /*if (min_density > 0 && min_mass > 0)*/
-      /*top_data[rois_index * num_class + label] =*/
-      /*density / min_density + mass / min_mass;*/
-      /*else if (min_density > 0)*/
-      /*top_data[rois_index * num_class + label] = density / min_density;*/
-      /*else*/
-      /*top_data[rois_index * num_class + label] = mass / min_mass;*/
     }
-    /*top_data[rois_index * num_class + label] =*/
-    /*sum / (hend - hstart) / (wend - wstart);*/
-    /*top_data[rois_index * num_class + label] = sum;*/
-    /*top_data[rois_index * num_class + label] =*/
-    /*log(sum / (hend - hstart) / (wend - wstart)) / r;*/
-    /*top_data[rois_index * num_class + label] = maxval;*/
   }
 }
 
@@ -639,18 +598,11 @@ __global__ void LabelBBoxes(const int num_roi, const Dtype *const opg_data,
     const int wend = min(int(roi[3]), width);
     const int hend = min(int(roi[4]), height);
 
-    /*Dtype sum = 0;*/
-    /*Dtype maxval = -FLT_MAX;*/
     Dtype mass = 0;
     for (int c = 0; c < channels; ++c) {
       const Dtype *gradient = opg_data + c * height * width;
       for (int h = hstart; h < hend; ++h) {
         for (int w = wstart; w < wend; ++w) {
-          /*sum += gradient[h * width + w];*/
-          /*sum += exp(max(r * gradient[h * width + w], kLOG_THRESHOLD));*/
-          /*if (maxval < gradient[h * width + w]) {*/
-          /*maxval = gradient[h * width + w];*/
-          /*}*/
           if (threshold < gradient[h * width + w]) {
             mass++;
           }
@@ -664,20 +616,7 @@ __global__ void LabelBBoxes(const int num_roi, const Dtype *const opg_data,
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(0);
 
-      /*if (min_density > 0 && min_mass > 0)*/
-      /*top_data[rois_index * num_class + label] =*/
-      /*density / min_density + mass / min_mass;*/
-      /*else if (min_density > 0)*/
-      /*top_data[rois_index * num_class + label] = density / min_density;*/
-      /*else*/
-      /*top_data[rois_index * num_class + label] = mass / min_mass;*/
     }
-    /*top_data[rois_index * num_class + label] =*/
-    /*sum / (hend - hstart) / (wend - wstart);*/
-    /*top_data[rois_index * num_class + label] = sum;*/
-    /*top_data[rois_index * num_class + label] =*/
-    /*log(sum / (hend - hstart) / (wend - wstart)) / r;*/
-    /*top_data[rois_index * num_class + label] = maxval;*/
   }
 }
 
