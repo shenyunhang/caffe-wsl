@@ -14,7 +14,6 @@ namespace caffe {
 template <typename Dtype>
 void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
                Blob<Dtype> *label_blob, const int save_id, const int num_im,
-               const int height_im, const int width_im, const bool is_resize,
                const vector<string> voc_label, const int ignore_label) {
   const int num_roi = rois_blob->num();
   const int num_class = fliter_blob->channels();
@@ -49,15 +48,9 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
     for (int r = 0; r < num_roi; ++r) {
       if (r % each_page_num == 0) {
         page++;
-        if (is_resize) {
-          cv::resize(im_mat, im_mat_o, cv::Size(width_im, height_im));
-          cv::resize(im_mat, im_mat_l, cv::Size(width_im, height_im));
-          cv::resize(im_mat, im_mat_a, cv::Size(width_im, height_im));
-        } else {
-          im_mat.copyTo(im_mat_o);
-          im_mat.copyTo(im_mat_l);
-          im_mat.copyTo(im_mat_a);
-        }
+        im_mat.copyTo(im_mat_o);
+        im_mat.copyTo(im_mat_l);
+        im_mat.copyTo(im_mat_a);
       }
 
       // draw rectangle
@@ -251,8 +244,8 @@ Dtype get_num_ob_(const Dtype *in, const int count, const Dtype threshold) {
 
 template <typename Dtype>
 void RepartitionLayer<Dtype>::Score_map_crf() {
-  crf_data_->ReshapeLike(*raw_opg_);
-  caffe_copy(crf_data_->count(), raw_opg_->cpu_data(),
+  crf_data_->ReshapeLike(*raw_data_);
+  caffe_copy(crf_data_->count(), raw_data_->cpu_data(),
              crf_data_->mutable_cpu_data());
 
   //-----------------------------------------------------------------------
@@ -282,7 +275,7 @@ void RepartitionLayer<Dtype>::Score_map_crf() {
   shared_ptr<Blob<Dtype> > feature_blob = conv5_blob;
 
   //-----------------------------------------------------------------------
-  vector<int> crf_opg_shape = raw_opg_->shape();
+  vector<int> crf_opg_shape = raw_data_->shape();
   crf_opg_shape[1] = 2;
   crf_opg_->Reshape(crf_opg_shape);
   caffe_set(crf_opg_->count(), Dtype(0), crf_opg_->mutable_cpu_data());
@@ -324,8 +317,8 @@ void RepartitionLayer<Dtype>::Score_map_crf() {
 
   //-----------------------------------------------------------------------
   crf_data_dim_->Reshape(1, 2, 1, 1);
-  crf_data_dim_->mutable_cpu_data()[0] = raw_opg_->shape(2);
-  crf_data_dim_->mutable_cpu_data()[1] = raw_opg_->shape(3);
+  crf_data_dim_->mutable_cpu_data()[0] = raw_data_->shape(2);
+  crf_data_dim_->mutable_cpu_data()[1] = raw_data_->shape(3);
 
   //-----------------------------------------------------------------------
   crf_layer_->Forward(crf_bottom_vec_, crf_top_vec_);
@@ -437,26 +430,28 @@ __global__ void InitFilter_Test(const int count, const Dtype *const label_data,
 template <typename Dtype>
 void RepartitionLayer<Dtype>::InitFilter(const Dtype *const label_gpu_data,
                                          Dtype *const top_gpu_data) {
-  if (is_instance_label_) {
-    caffe_gpu_set(num_roi_ * num_class_, Dtype(-1), top_gpu_data);
-  } else if (this->phase_ == TRAIN) {
-    caffe_gpu_set(num_roi_ * num_class_, Dtype(1), top_gpu_data);
-  } else {
-    // NOLINT_NEXT_LINE(whitespace/operators)
-    InitFilter_Test<Dtype> << <CAFFE_GET_BLOCKS(num_roi_ * num_class_),
-                               CAFFE_CUDA_NUM_THREADS>>>
-        (num_roi_ * num_class_, label_gpu_data, num_class_, top_gpu_data);
-  }
-}
 
-template <typename Dtype>
-__global__ void OR_gpu(const int count, const Dtype *const in_data1,
-                       const Dtype *const in_data2, Dtype *const out_data) {
-  CUDA_KERNEL_LOOP(index, count) {
-    if (in_data1[index] == 1 || in_data2[index] == 1)
-      out_data[index] = 1;
-    else
-      out_data[index] = 0;
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+    case CPGParameter_Mode_PRED:
+    case CPGParameter_Mode_CPG_POOLING:
+      if (this->phase_ == TRAIN) {
+        caffe_gpu_set(num_roi_ * num_class_, Dtype(1), top_gpu_data);
+      } else {
+        // NOLINT_NEXT_LINE(whitespace/operators)
+        InitFilter_Test<Dtype> << <CAFFE_GET_BLOCKS(num_roi_ * num_class_),
+                                   CAFFE_CUDA_NUM_THREADS>>>
+            (num_roi_ * num_class_, label_gpu_data, num_class_, top_gpu_data);
+      }
+      break;
+    case CPGParameter_Mode_INSTANCE_LABEL:
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
+      caffe_gpu_set(num_roi_ * num_class_, Dtype(-1), top_gpu_data);
+      break;
+    case CPGParameter_Mode_CRF:
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
   }
 }
 
@@ -539,7 +534,6 @@ __global__ void WeightBBoxes(const int num_roi, const Dtype *const opg_data,
       top_data[rois_index * num_class + cls_id] = Dtype(1);
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(0);
-
     }
   }
 }
@@ -615,10 +609,86 @@ __global__ void LabelBBoxes(const int num_roi, const Dtype *const opg_data,
       top_data[rois_index * num_class + cls_id] = Dtype(-1);
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(0);
-
     }
   }
 }
+
+template <typename Dtype>
+__global__ void SumBBoxes(const int num_roi, const Dtype *const opg_data,
+                          const int num, const int channels, const int height,
+                          const int width, const Dtype *const rois_data,
+                          const int num_class, const int cls_id,
+                          const Dtype threshold, const Dtype min_density,
+                          const Dtype min_mass, Dtype *const top_data,
+                          const int r = 5) {
+  CUDA_KERNEL_LOOP(index, num_roi) {
+    const int rois_index = index;
+
+    const Dtype *const roi = rois_data + 5 * rois_index;
+    const int wstart = max(int(roi[1]), 0);
+    const int hstart = max(int(roi[2]), 0);
+    const int wend = min(int(roi[3]), width);
+    const int hend = min(int(roi[4]), height);
+
+    const int wstart_inner = max(int(roi[1] / 1.8), 0);
+    const int hstart_inner = max(int(roi[2] / 1.8), 0);
+    const int wend_inner = min(int(roi[3] / 1.8), width);
+    const int hend_inner = min(int(roi[4] / 1.8), height);
+
+    const int wstart_outer = max(int(roi[1] * 1.8), 0);
+    const int hstart_outer = max(int(roi[2] * 1.8), 0);
+    const int wend_outer = min(int(roi[3] * 1.8), width);
+    const int hend_outer = min(int(roi[4] * 1.8), height);
+
+    Dtype sum = 0;
+    Dtype sum_inner = 0;
+    Dtype sum_outter = 0;
+    for (int c = 0; c < channels; ++c) {
+      const Dtype *gradient = opg_data + c * height * width;
+
+      for (int h = 0; h < height; ++h) {
+        for (int w = 0; w < width; ++w) {
+
+          if (h > hstart && h < hend && w > wstart && w < wend) {
+            sum += gradient[h * width + w];
+          }
+
+          if (h > hstart_inner && h < hend_inner && w > wstart_inner &&
+              w < wend_inner) {
+            sum_inner += gradient[h * width + w];
+          }
+
+          if (h > hstart_outer && h < hend_outer && w > wstart_outer &&
+              w < wend_outer) {
+            sum_outter += gradient[h * width + w];
+          }
+        }
+      }
+    }
+
+    Dtype result = (sum - sum_inner) - (sum_outter - sum_inner);
+    top_data[rois_index * num_class + cls_id] = result > 0 ? result : 0;
+  }
+}
+
+/*template <typename Dtype>*/
+/*__global__ void opg_sum(const int num_roi, const Dtype *const opg_data,*/
+/*const int channels_opg, const int height,*/
+/*const int width, const int offset_channel_opg,*/
+/*const int channels_sum, const int offset_channel_sum,*/
+/*const Dtype threshold, Dtype *const sum_data) {*/
+/*CUDA_KERNEL_LOOP(index, num_roi) {*/
+/*int opg_offset =*/
+/*(index * channels_opg + offset_channel_opg) * height * width;*/
+/*int sum_offset = index * channels_sum + offset_channel_sum;*/
+/*const Dtype *const opg_data_this = opg_data + opg_offset;*/
+/*sum_data[sum_offset] = 0;*/
+/*for (int i = 0; i < height * width; ++i) {*/
+/*sum_data[sum_offset] +=*/
+/*opg_data_this[i] > 0 ? opg_data_this[i] : -opg_data_this[i];*/
+/*}*/
+/*}*/
+/*}*/
 
 template <typename Dtype>
 bool RepartitionLayer<Dtype>::Need_Repartition(const int cls_id,
@@ -647,8 +717,9 @@ bool RepartitionLayer<Dtype>::Need_Repartition(const int cls_id,
 }
 
 template <typename Dtype>
-bool RepartitionLayer<Dtype>::Need_Order(const Dtype label,
+bool RepartitionLayer<Dtype>::Need_Order(const int cls_id, const Dtype label,
                                          const Dtype predict) {
+  if (cls_id == ignore_label_) return false;
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
     if (label < 0.5) return false;
@@ -670,6 +741,9 @@ template <typename Dtype>
 void RepartitionLayer<Dtype>::After() {
   // this should not in the Reshape function
   // as Reshape function will be call before start
+  if (this->phase_ == TEST) {
+    return;
+  }
   total_im_ += num_im_;
   total_roi_ += num_roi_;
   accum_im_ += num_im_;
@@ -704,7 +778,7 @@ void RepartitionLayer<Dtype>::After() {
 template <typename Dtype>
 void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                           const vector<Blob<Dtype> *> &top) {
-  InitFilter(bottom[bottom_label_index_]->gpu_data(),
+  InitFilter(bottom[bottom_index_["label"]]->gpu_data(),
              fliter_.mutable_gpu_data());
 
   if (!is_opg_) {
@@ -712,12 +786,12 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     return;
   }
 
+  LOG_IF(INFO, debug_info_) << "------------------start-----------------------";
   //-----------------------------------------------------------------------
-  // me back
   //-----------------------------------------------------------------------
-  const Dtype *bottom_rois = bottom[bottom_rois_index_]->cpu_data();
-  const Dtype *bottom_label = bottom[bottom_label_index_]->cpu_data();
-  const Dtype *bottom_predict = bottom[bottom_predict_index_]->cpu_data();
+  const Dtype *bottom_label = bottom[bottom_index_["label"]]->cpu_data();
+  const Dtype *bottom_predict = bottom[bottom_index_["predict"]]->cpu_data();
+  const Dtype *bottom_rois = bottom[bottom_index_["rois"]]->cpu_data();
   Dtype *pos_label_data;
   Dtype *neg_label_data;
   if (is_order_ && top.size() == 3) {
@@ -735,94 +809,200 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                               << " label: " << bottom_label[index]
                               << " score: " << bottom_predict[index];
 
+    // whether this class need it
     if (bottom_label[index] > 0.5) ++gt_num;
     if (Need_Repartition(cls_id, bottom_label[index], bottom_predict[index])) {
-    } else if (Need_Order(bottom_label[index], bottom_predict[index])) {
+    } else if (Need_Order(cls_id, bottom_label[index], bottom_predict[index])) {
     } else {
       continue;
     }
 
     //-----------------------------------------------------------------------
-    caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_data());
-    caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_diff());
-    for (int channel_id = 0; channel_id < channels_opg_; ++channel_id) {
-      caffe_gpu_abs(opg_size_, bottom[bottom_opgs_index_]->gpu_data() +
-                                   bottom[bottom_opgs_index_]
-                                       ->offset(opg_id, channel_id, 0, 0),
-                    raw_opg_->mutable_gpu_diff());
-      caffe_gpu_add(opg_size_, raw_opg_->gpu_data(), raw_opg_->gpu_diff(),
-                    raw_opg_->mutable_gpu_data());
-    }
-    ++opg_id;
+    // propocess data
+    switch (this->layer_param_.cpg_param().mode()) {
+      case CPGParameter_Mode_DEFAULT:
+      case CPGParameter_Mode_PRED:
+      case CPGParameter_Mode_INSTANCE_LABEL:
+      case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
+      case CPGParameter_Mode_CPG_POOLING: {
+        caffe_gpu_set(raw_data_->count(), Dtype(0),
+                      raw_data_->mutable_gpu_data());
+        caffe_gpu_set(raw_data_->count(), Dtype(0),
+                      raw_data_->mutable_gpu_diff());
+        caffe_gpu_abs(opg_size_,
+                      bottom[bottom_index_["opg"]]->gpu_data() +
+                          bottom[bottom_index_["opg"]]->offset(0, opg_id, 0, 0),
+                      raw_data_->mutable_gpu_data());
+        ++opg_id;
 
-    // TODO(YH): order_threshold_
-    if (order_threshold_ > 0 &&
-        Need_Order(bottom_label[index], bottom_predict[index])) {
-      ++od_num;
-      caffe_cpu_threshold_bbox(raw_opg_, bboxes_, fg_threshold_, cls_id);
-      Dtype max_size = 0;
-      const Dtype *bbox = bboxes_->cpu_data();
-      for (int box_id = 0; box_id < max_bb_per_cls_; ++box_id) {
-        if (bbox[0] == -1) break;
-        Dtype size = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]);
-        if (max_size < size) max_size = size;
-        bbox += bboxes_->offset(1);
-      }
-      Dtype max_scale = max_size / (height_im_ * width_im_);
-      if (max_scale < order_threshold_) {
-        pos_label_data[cls_id] = -1;
-        neg_label_data[cls_id] = -1;
-        continue;
-      }
+        // TODO(YH): order_threshold_
+        if (order_threshold_ > 0 &&
+            Need_Order(cls_id, bottom_label[index], bottom_predict[index])) {
+          ++od_num;
+          caffe_cpu_threshold_bbox(raw_data_, bboxes_, fg_threshold_, cls_id);
+          Dtype max_size = 0;
+          const Dtype *bbox = bboxes_->cpu_data();
+          for (int box_id = 0; box_id < max_bb_per_cls_; ++box_id) {
+            if (bbox[0] == -1) break;
+            Dtype size = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]);
+            if (max_size < size) max_size = size;
+            bbox += bboxes_->offset(1);
+          }
+          Dtype max_scale = max_size / (height_im_ * width_im_);
+          if (max_scale < order_threshold_) {
+            pos_label_data[cls_id] = -1;
+            neg_label_data[cls_id] = -1;
+            continue;
+          }
+        }
+      } break;
+      // case CPGParameter_Mode_CPG_POOLING: {
+      //  Blob<Dtype> *opg_pool = bottom[bottom_index_["opg_pool"]];
+      //  // NOLINT_NEXT_LINE(whitespace/operators)
+      //  opg_sum<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
+      // CAFFE_CUDA_NUM_THREADS>>>
+      //      (num_roi_, opg_pool->gpu_data(), opg_pool->channels(),
+      //       opg_pool->height(), opg_pool->width(), opg_id, num_class_,
+      // cls_id,
+      //       0, fliter_.mutable_gpu_data());
+      //  ++opg_id;
+      //}
+      // break;
+      case CPGParameter_Mode_CRF:
+        break;
+      default:
+        LOG(FATAL) << "Unknown mode.";
     }
 
     if (!Need_Repartition(cls_id, bottom_label[index], bottom_predict[index]))
       continue;
     ++re_num;
 
-    const Dtype maxval = caffe_cpu_max_element(opg_size_, raw_opg_->cpu_data());
-    const Dtype threshold = maxval * fg_threshold_;
+    switch (this->layer_param_.cpg_param().mode()) {
+      case CPGParameter_Mode_DEFAULT: {
+        const Dtype maxval =
+            caffe_cpu_max_element(opg_size_, raw_data_->cpu_data());
+        const Dtype threshold = maxval * fg_threshold_;
 
-    const Dtype im_mass =
-        get_num_ob_(raw_opg_->cpu_data(), opg_size_, threshold);
-    const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
+        const Dtype im_mass =
+            get_num_ob_(raw_data_->cpu_data(), opg_size_, threshold);
+        const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
 
-    LOG_IF(INFO, debug_info_) << "maxval: " << maxval
-                              << " threshold: " << threshold
-                              << " im_mass: " << im_mass
-                              << " im_density: " << im_density;
-    if (is_instance_label_) {
-      if (is_instance_softmax_) {
-        LOG_IF(INFO, debug_info_) << "LabelBBoxes:";
+        LOG_IF(INFO, debug_info_) << "maxval: " << maxval
+                                  << " threshold: " << threshold
+                                  << " im_mass: " << im_mass
+                                  << " im_density: " << im_density;
+        LOG_IF(INFO, debug_info_) << "WeightBBoxes:";
         // NOLINT_NEXT_LINE(whitespace/operators)
-        LabelBBoxes_softmax<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
-                                       CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_, raw_opg_->gpu_data(), 1, 1, height_im_, width_im_,
+        WeightBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
+                                CAFFE_CUDA_NUM_THREADS>>>
+            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold,
              im_density * density_threshold_, im_mass * mass_threshold_,
              fliter_.mutable_gpu_data());
-      } else {
-      }
-    } else {
-      if (is_pred_) {
+      } break;
+      case CPGParameter_Mode_PRED: {
+        const Dtype maxval =
+            caffe_cpu_max_element(opg_size_, raw_data_->cpu_data());
+        const Dtype threshold = maxval * fg_threshold_;
+
+        const Dtype im_mass =
+            get_num_ob_(raw_data_->cpu_data(), opg_size_, threshold);
+        const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
+
+        LOG_IF(INFO, debug_info_) << "maxval: " << maxval
+                                  << " threshold: " << threshold
+                                  << " im_mass: " << im_mass
+                                  << " im_density: " << im_density;
         LOG_IF(INFO, debug_info_) << "ScoreBBoxes:";
         const Dtype min_density = im_density * density_threshold_;
         // NOLINT_NEXT_LINE(whitespace/operators)
         ScoreBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
                                CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_, raw_opg_->gpu_data(), 1, 1, height_im_, width_im_,
+            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold, min_density, im_mass,
              fliter_.mutable_gpu_data());
-      } else {
-        LOG_IF(INFO, debug_info_) << "WeightBBoxes:";
+      } break;
+      case CPGParameter_Mode_INSTANCE_LABEL: {
+        const Dtype maxval =
+            caffe_cpu_max_element(opg_size_, raw_data_->cpu_data());
+        const Dtype threshold = maxval * fg_threshold_;
+
+        const Dtype im_mass =
+            get_num_ob_(raw_data_->cpu_data(), opg_size_, threshold);
+        const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
+
+        LOG_IF(INFO, debug_info_) << "maxval: " << maxval
+                                  << " threshold: " << threshold
+                                  << " im_mass: " << im_mass
+                                  << " im_density: " << im_density;
+        LOG_IF(INFO, debug_info_) << "LabelBBoxes:";
         // NOLINT_NEXT_LINE(whitespace/operators)
-        WeightBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
-                                CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_, raw_opg_->gpu_data(), 1, 1, height_im_, width_im_,
+        LabelBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
+                               CAFFE_CUDA_NUM_THREADS>>>
+            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold,
              im_density * density_threshold_, im_mass * mass_threshold_,
              fliter_.mutable_gpu_data());
-      }
+      } break;
+      case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
+        const Dtype maxval =
+            caffe_cpu_max_element(opg_size_, raw_data_->cpu_data());
+        const Dtype threshold = maxval * fg_threshold_;
+
+        const Dtype im_mass =
+            get_num_ob_(raw_data_->cpu_data(), opg_size_, threshold);
+        const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
+
+        LOG_IF(INFO, debug_info_) << "maxval: " << maxval
+                                  << " threshold: " << threshold
+                                  << " im_mass: " << im_mass
+                                  << " im_density: " << im_density;
+        LOG_IF(INFO, debug_info_) << "LabelBBoxes_softmax:";
+        // NOLINT_NEXT_LINE(whitespace/operators)
+        LabelBBoxes_softmax<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
+                                       CAFFE_CUDA_NUM_THREADS>>>
+            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
+             bottom_rois, num_class_, cls_id, threshold,
+             im_density * density_threshold_, im_mass * mass_threshold_,
+             fliter_.mutable_gpu_data());
+      } break;
+      case CPGParameter_Mode_CPG_POOLING: {
+        LOG_IF(INFO, debug_info_) << "SumBBoxes:";
+        // NOLINT_NEXT_LINE(whitespace/operators)
+        SumBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
+                             CAFFE_CUDA_NUM_THREADS>>>
+            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
+             bottom_rois, num_class_, cls_id, 0, 0, 0,
+             fliter_.mutable_gpu_data());
+
+        // left top k
+        Dtype *fliter_data = fliter_.mutable_cpu_data();
+        for (int k = 0; k < 10; ++k) {
+          Dtype max_value = 0;
+          int max_id = -1;
+          for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+            if (fliter_data[roi_id * num_class_ + cls_id] > max_value) {
+              max_value = fliter_data[roi_id * num_class_ + cls_id];
+              max_id = roi_id * num_class_ + cls_id;
+            }
+          }
+          fliter_data[max_id] = -1;
+        }
+
+        for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+          if (fliter_data[roi_id * num_class_ + cls_id] == -1) {
+            fliter_data[roi_id * num_class_ + cls_id] = 1;
+          } else {
+            fliter_data[roi_id * num_class_ + cls_id] = 0;
+          }
+        }
+
+      } break;
+      case CPGParameter_Mode_CRF:
+        break;
+      default:
+        LOG(FATAL) << "Unknown mode.";
     }
   }
 
@@ -830,55 +1010,35 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   // Show patch
   //----------------------------------------------------------------------
   if (debug_info_) {
-    bool is_resize = false;
-    if (this->phase_ == TEST) is_resize = true;
-    Show_rois(bottom[bottom_rois_index_], &fliter_, bottom[bottom_label_index_],
-              total_im_, num_im_, height_im_, width_im_, is_resize, voc_label_,
+    Show_rois(bottom[bottom_index_["rois"]], &fliter_,
+              bottom[bottom_index_["label"]], total_im_, num_im_, voc_label_,
               ignore_label_);
   }
 
-  if (is_instance_label_) {
-    if (is_instance_softmax_) {
-      caffe_set(num_roi_, Dtype(num_class_), top[0]->mutable_cpu_data());
-      Dtype *instance_label_data = top[0]->mutable_cpu_data();
-      const Dtype *fliter_data = fliter_.cpu_data();
-      for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
-        int index = cls_id;
-        if (Need_Repartition(cls_id, bottom_label[index],
-                             bottom_predict[index])) {
-        } else {
-          continue;
-        }
-        for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
-          Dtype f1 = instance_label_data[roi_id];
-          Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
+  // get the final output from fliter
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+    case CPGParameter_Mode_PRED:
+      top[0]->CopyFrom(fliter_, false, false);
+      if (bottom.size() > bottom_index_["io"]) {
+        if (re_num > 0) {
+          int save_id = int(bottom[bottom_index_["io"]]->cpu_data()[0]);
+          LOG_IF(INFO, debug_info_) << "save_id: " << save_id;
 
-          if (f1 == num_class_) {
-            if (f2 == num_class_) {
-              instance_label_data[roi_id] = num_class_;
-            } else if (f2 == -1) {
-              instance_label_data[roi_id] = -1;
-            } else {
-              instance_label_data[roi_id] = f2;
-            }
-          } else if (f1 == -1) {
-            if (f2 == num_class_) {
-              instance_label_data[roi_id] = -1;
-            } else if (f2 == -1) {
-              instance_label_data[roi_id] = -1;
-            } else {
-              instance_label_data[roi_id] = f2;
-            }
-          } else {
-            if (f2 == num_class_) {
-            } else if (f2 == -1) {
-            } else {
-              instance_label_data[roi_id] = -1;
-            }
-          }
+          BlobProto save_blob;
+          top[0]->ToProto(&save_blob, false);
+          stringstream save_path;
+          save_path << "data/opg_cache/" << save_id;
+          /*LOG(INFO) << "save_path: " << save_path<<" " << save_id;*/
+          WriteProtoToBinaryFile(save_blob, save_path.str());
         }
+
+        caffe_gpu_or(num_roi_ * num_class_,
+                     bottom[bottom_index_["fliter"]]->gpu_data(),
+                     top[0]->gpu_data(), top[0]->mutable_gpu_data());
       }
-    } else {
+      break;
+    case CPGParameter_Mode_INSTANCE_LABEL: {
       caffe_set(num_roi_, Dtype(-1), top[0]->mutable_cpu_data());
       Dtype *instance_label_data = top[0]->mutable_cpu_data();
       const Dtype *fliter_data = fliter_.cpu_data();
@@ -923,46 +1083,85 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
           }
         }
       }
-    }
-  } else {
-    top[0]->CopyFrom(fliter_, false, false);
-    if (bottom.size() > bottom_io_index_) {
-      if (re_num > 0) {
-        int save_id = int(bottom[bottom_io_index_]->cpu_data()[0]);
-        LOG_IF(INFO, debug_info_) << "save_id: " << save_id;
+    } break;
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
+      caffe_set(num_roi_, Dtype(num_class_), top[0]->mutable_cpu_data());
+      Dtype *instance_label_data = top[0]->mutable_cpu_data();
+      const Dtype *fliter_data = fliter_.cpu_data();
+      for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
+        int index = cls_id;
+        if (Need_Repartition(cls_id, bottom_label[index],
+                             bottom_predict[index])) {
+        } else {
+          continue;
+        }
+        for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
+          Dtype f1 = instance_label_data[roi_id];
+          Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
 
-        BlobProto save_blob;
-        top[0]->ToProto(&save_blob, false);
-        stringstream save_path;
-        save_path << "data/opg_cache/" << save_id;
-        /*LOG(INFO) << "save_path: " << save_path<<" " << save_id;*/
-        WriteProtoToBinaryFile(save_blob, save_path.str());
+          if (f1 == num_class_) {
+            if (f2 == num_class_) {
+              instance_label_data[roi_id] = num_class_;
+            } else if (f2 == -1) {
+              instance_label_data[roi_id] = -1;
+            } else {
+              instance_label_data[roi_id] = f2;
+            }
+          } else if (f1 == -1) {
+            if (f2 == num_class_) {
+              instance_label_data[roi_id] = -1;
+            } else if (f2 == -1) {
+              instance_label_data[roi_id] = -1;
+            } else {
+              instance_label_data[roi_id] = f2;
+            }
+          } else {
+            if (f2 == num_class_) {
+            } else if (f2 == -1) {
+            } else {
+              instance_label_data[roi_id] = -1;
+            }
+          }
+        }
       }
-
-      // NOLINT_NEXT_LINE(whitespace/operators)
-      OR_gpu<Dtype> << <CAFFE_GET_BLOCKS(num_roi_ * num_class_),
-                        CAFFE_CUDA_NUM_THREADS>>>
-          (num_roi_ * num_class_, bottom[bottom_filt_index_]->gpu_data(),
-           top[0]->gpu_data(), top[0]->mutable_gpu_data());
-    }
+    } break;
+    case CPGParameter_Mode_CPG_POOLING:
+      top[0]->CopyFrom(fliter_, false, false);
+      break;
+    case CPGParameter_Mode_CRF:
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
   }
   //-----------------------------------------------------------------------
+
   int roi_left = 0;
-  if (is_instance_label_) {
-    if (is_instance_softmax_) {
-      const Dtype *instance_label_data = top[0]->cpu_data();
-      for (int i = 0; i < top[0]->count(); ++i) {
-        if (instance_label_data[i] <= num_class_ - 1) roi_left++;
-      }
-    } else {
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+    case CPGParameter_Mode_PRED:
+    case CPGParameter_Mode_CPG_POOLING:
+      roi_left = fliter_.asum_data() - (num_class_ - gt_num) * num_roi_;
+      break;
+    case CPGParameter_Mode_INSTANCE_LABEL: {
       const Dtype *instance_label_data = top[0]->cpu_data();
       for (int i = 0; i < top[0]->count(); ++i) {
         if (instance_label_data[i] == 1) roi_left++;
       }
-    }
-  } else {
-    roi_left = fliter_.asum_data() - (num_class_ - gt_num) * num_roi_;
+    } break;
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
+      const Dtype *instance_label_data = top[0]->cpu_data();
+      for (int i = 0; i < top[0]->count(); ++i) {
+        if (instance_label_data[i] <= num_class_ - 1) roi_left++;
+      }
+    } break;
+    case CPGParameter_Mode_CRF:
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
   }
+  LOG_IF(INFO, debug_info_) << "gt_num: " << gt_num
+                            << " roi_left: " << roi_left;
+
   total_label_ += gt_num;
   total_roi_l_ += roi_left;
   accum_label_ += gt_num;

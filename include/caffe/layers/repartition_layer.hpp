@@ -23,7 +23,7 @@ class RepartitionLayer : public Layer<Dtype> {
  public:
   explicit RepartitionLayer(const LayerParameter& param)
       : Layer<Dtype>(param),
-        raw_opg_(new Blob<Dtype>()),
+        raw_data_(new Blob<Dtype>()),
         bboxes_(new Blob<Dtype>()) {}
   // explicit RepartitionLayer(const LayerParameter& param)
   //: Layer<Dtype>(param),
@@ -49,7 +49,7 @@ class RepartitionLayer : public Layer<Dtype> {
   void InitFilter(const Dtype* const label_gpu_data, Dtype* const top_gpu_data);
   void After();
   bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
-  bool Need_Order(const Dtype label, const Dtype score);
+  bool Need_Order(const int cls_id, const Dtype label, const Dtype score);
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -65,11 +65,7 @@ class RepartitionLayer : public Layer<Dtype> {
 
   bool is_opg_;
   bool debug_info_;
-  bool is_crf_;
-  bool is_pred_;
   bool is_order_;
-  bool is_instance_label_;
-  bool is_instance_softmax_;
 
   int ignore_label_;
 
@@ -81,13 +77,8 @@ class RepartitionLayer : public Layer<Dtype> {
   float mass_threshold_;
   float density_threshold_;
 
-  int bottom_opgs_index_;
-  int bottom_rois_index_;
-  int bottom_label_index_;
-  int bottom_predict_index_;
-  int bottom_filt_index_;
-  int bottom_io_index_;
-  Blob<Dtype>* raw_opg_;
+  map<string,int> bottom_index_;
+  Blob<Dtype>* raw_data_;
   Blob<Dtype> fliter_;
 
   int total_im_;
@@ -115,6 +106,7 @@ class RepartitionLayer : public Layer<Dtype> {
   int width_im_;
   int channels_opg_;
   int opg_size_;
+  int num_gt_;
 
   // crf
   shared_ptr<DenseCRFLayer<Dtype> > crf_layer_;

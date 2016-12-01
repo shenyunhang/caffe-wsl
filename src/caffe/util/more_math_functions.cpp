@@ -31,7 +31,7 @@ Dtype caffe_cpu_sum(const int N, const Dtype *x) {
   Dtype sum = (*x);
   for (int i = 1; i < N; ++i) {
     ++x;
-    sum+=(*x);
+    sum += (*x);
   }
   return sum;
 }

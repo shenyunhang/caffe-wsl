@@ -48,7 +48,7 @@ class OPGLayer : public Layer<Dtype> {
   void Get_split_top_blob();
   void Show_opg(const Dtype* opg_data, const int cur, const string info = "");
   bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
-  bool Need_Order(const Dtype label, const Dtype score);
+  bool Need_Order(const int cls_id,const Dtype label, const Dtype score);
   void After();
 
  protected:
@@ -99,7 +99,6 @@ class OPGLayer : public Layer<Dtype> {
   vector<shared_ptr<Blob<Dtype> > > history_blobs_;
   bool is_history_init_;
 
-  bool net_blob_init_;
   vector<Blob<Dtype>*> split_top_blob_;
   vector<vector<bool> > bottom_need_backward_;
   vector<vector<bool> > origin_param_propagate_down_;

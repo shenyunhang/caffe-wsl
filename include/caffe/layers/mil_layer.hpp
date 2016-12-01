@@ -54,7 +54,7 @@ class MILLayer : public Layer<Dtype> {
   int bottom_label_index_;
   int bottom_predict_index_;
   int bottom_rois_index_;
-  int bottom_filt_index_;
+  int bottom_filter_index_;
   int bottom_io_index_;
 
   int top_select_index_;

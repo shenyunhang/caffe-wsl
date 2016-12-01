@@ -32,6 +32,10 @@ template <typename Dtype>
 void caffe_gpu_maximum(const int N, const Dtype* const X, Dtype* const Y,
                        const int s, const int e);
 
+template <typename Dtype>
+void caffe_gpu_or(const int N, const Dtype* const x, const Dtype* const y,
+                  Dtype* const z);
+
 #endif  // !CPU_ONLY
 
 }  // namespace caffe

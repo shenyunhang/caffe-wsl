@@ -1254,15 +1254,20 @@ message SPPParameter {
 
 // Message that stores parameters used by OPGROISelectLayer
 message CPGParameter {
+  enum Mode {
+    DEFAULT = 0;
+    CRF = 1;
+    INSTANCE_LABEL = 2;
+    INSTANCE_SOFTMAX_LABEL = 3;
+    CPG_POOLING = 4;
+    PRED = 5;
+  }
   optional bool is_cpg = 21 [default = true];
-  optional bool is_order = 41 [default = false];
   optional bool is_contrast = 30 [default = false];
-  optional bool is_crf = 55 [default = false];
-  optional bool is_pred = 56 [default = false];
-  optional bool is_instance_label = 80 [default = false];
-  optional bool is_instance_softmax = 81 [default = false];
+  optional bool is_order = 41 [default = false];
   optional bool debug_info = 22 [default = false];
 
+  optional Mode mode = 90 [default = DEFAULT];
   optional int32 ignore_label = 70 [default = -1];
 
   required string start_layer_name = 23 [default = ''];
@@ -1276,22 +1281,6 @@ message CPGParameter {
   optional float bg_threshold = 52 [default = 0.001];
   optional float mass_threshold = 53 [default = 0.0];
   optional float density_threshold = 54 [default = 0.0];
-}
-
-// Message that stores parameters used by RepartitionLayer
-message RepartitionParameter {
-  optional bool is_opg = 1 [default = true];
-  optional bool debug_info = 3 [default = false];
-  optional float predict_threshold = 6 [default = 0.5];
-  optional float predict_order = 30 [default = 0.0];
-  optional float crf_threshold = 10 [default = 0.5];
-  optional float fg_threshold = 7 [default = 0.5];
-  optional float bg_threshold = 8 [default = 0.001];
-  optional float mass_threshold = 12 [default = 0.0];
-  optional float density_threshold = 13 [default = 0.0];
-  optional bool is_crf = 9 [default = false];
-  optional bool is_pred = 11 [default = false];
-  optional bool is_order = 20 [default = false];
 }
 
 // Message that stores parameters used by BBoxLayer

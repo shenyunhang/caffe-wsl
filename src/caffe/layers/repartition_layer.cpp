@@ -12,11 +12,7 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   CPGParameter this_layer_param = this->layer_param_.cpg_param();
   is_opg_ = this_layer_param.is_cpg();
   debug_info_ = this_layer_param.debug_info();
-  is_crf_ = this_layer_param.is_crf();
-  is_pred_ = this_layer_param.is_pred();
   is_order_ = this_layer_param.is_order();
-  is_instance_label_ = this_layer_param.is_instance_label();
-  is_instance_softmax_ = this_layer_param.is_instance_softmax();
 
   ignore_label_ = this_layer_param.ignore_label();
 
@@ -28,12 +24,30 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   mass_threshold_ = this_layer_param.mass_threshold();
   density_threshold_ = this_layer_param.density_threshold();
 
-  bottom_opgs_index_ = 0;
-  bottom_rois_index_ = 1;
-  bottom_label_index_ = 2;
-  bottom_predict_index_ = 3;
-  bottom_filt_index_ = 4;
-  bottom_io_index_ = 5;
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+      LOG(INFO) << "mode: DEFAULT";
+      break;
+    case CPGParameter_Mode_PRED:
+      LOG(INFO) << "mode: PRED";
+      break;
+    case CPGParameter_Mode_INSTANCE_LABEL:
+      LOG(INFO) << "mode: INSTANCE_LABEL";
+      break;
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
+      LOG(INFO) << "mode: INSTANCE_SOFTMAX_LABEL";
+      break;
+    case CPGParameter_Mode_CPG_POOLING:
+      LOG(INFO) << "mode: CPG_POOLING";
+      CHECK_EQ(is_order_, false)
+          << "In OPG_POOLING mode, is_order_ should be false.";
+      break;
+    case CPGParameter_Mode_CRF:
+      LOG(INFO) << "mode: CRF";
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
+  }
 
   total_im_ = 0;
   total_roi_ = 0;
@@ -58,7 +72,6 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   LOG(INFO) << "----------------------------------------------";
   LOG(INFO) << "is_opg_: " << is_opg_;
   LOG(INFO) << "is_order_: " << is_order_;
-  LOG(INFO) << "is_pred_: " << is_pred_;
   LOG(INFO) << "debug_info_: " << debug_info_;
   LOG(INFO) << "predict_threshold_:" << predict_threshold_;
   LOG(INFO) << "predict_order_:" << predict_order_;
@@ -67,10 +80,9 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   LOG(INFO) << "mass_threshold_:" << mass_threshold_;
   LOG(INFO) << "density_threshold_:" << density_threshold_;
   LOG(INFO) << "max_bb_per_cls_:" << max_bb_per_cls_;
-  LOG(INFO) << "is_crf_:" << is_crf_;
   LOG(INFO) << "----------------------------------------------";
 
-  if (is_crf_) {
+  if (false) {
     crf_bottom_vec_.clear();
     crf_bottom_vec_.push_back(crf_opg_.get());
     crf_bottom_vec_.push_back(crf_data_dim_.get());
@@ -112,65 +124,131 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                                       const vector<Blob<Dtype>*>& top) {
-  num_roi_ = bottom[bottom_rois_index_]->num();
-  num_class_ = bottom[bottom_label_index_]->channels();
-  num_im_ = bottom[bottom_label_index_]->num();
-  CHECK_EQ(num_im_, 1) << "current only support one image per forward-backward";
 
-  // shape fliter
-  vector<int> fliter_shape;
-  fliter_shape.push_back(num_roi_);
-  fliter_shape.push_back(num_class_);
-  fliter_.Reshape(fliter_shape);
-
-  // shape top
-  if (is_instance_label_) {
-    CHECK_EQ(top.size(), 1) << "In instance_label mode, only out put one blob.";
-    vector<int> top_shape;
-    top_shape.push_back(num_roi_);
-    top[0]->Reshape(top_shape);
-  } else {
-    vector<int> top_shape;
-    top_shape.push_back(num_roi_);
-    top_shape.push_back(num_class_);
-    top[0]->Reshape(top_shape);
-
-    // In test model, the output is one.
-    if (top.size() == 3) {
-      top[1]->CopyFrom(*bottom[bottom_label_index_], false, true);
-      top[2]->ReshapeLike(*bottom[bottom_label_index_]);
-      caffe_set(top[2]->count(), Dtype(0), top[2]->mutable_cpu_data());
-    }
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+      break;
+    case CPGParameter_Mode_PRED:
+      break;
+    case CPGParameter_Mode_INSTANCE_LABEL:
+      break;
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
+      break;
+    case CPGParameter_Mode_CPG_POOLING:
+      break;
+    case CPGParameter_Mode_CRF:
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
   }
 
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+    case CPGParameter_Mode_PRED:
+    case CPGParameter_Mode_INSTANCE_LABEL:
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
+      bottom_index_["opg"] = 0;
+      bottom_index_["rois"] = 1;
+      bottom_index_["label"] = 2;
+      bottom_index_["predict"] = 3;
+      bottom_index_["fliter"] = 4;
+      bottom_index_["io"] = 5;
+
+      channels_opg_ = 1;
+      height_im_ = bottom[bottom_index_["opg"]]->height();
+      width_im_ = bottom[bottom_index_["opg"]]->width();
+      opg_size_ = height_im_ * width_im_;
+      raw_data_->Reshape(1, 1, height_im_, width_im_);
+
+      CHECK_EQ(bottom[bottom_index_["label"]]->num(),
+               bottom[bottom_index_["opg"]]->num())
+          << "bottom nums are not the same.";
+
+      break;
+    case CPGParameter_Mode_CPG_POOLING:
+      bottom_index_["opg"] = 0;
+      bottom_index_["rois"] = 1;
+      bottom_index_["label"] = 2;
+      bottom_index_["predict"] = 3;
+
+      break;
+    case CPGParameter_Mode_CRF:
+      LOG(FATAL) << "Not yet.";
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
+  }
+
+  num_roi_ = bottom[bottom_index_["rois"]]->num();
+  num_class_ = bottom[bottom_index_["label"]]->channels();
+  num_im_ = bottom[bottom_index_["label"]]->num();
+
+  // shape top
+  switch (this->layer_param_.cpg_param().mode()) {
+    case CPGParameter_Mode_DEFAULT:
+    case CPGParameter_Mode_PRED: {
+      vector<int> top_dims;
+      top_dims.push_back(num_roi_);
+      top_dims.push_back(num_class_);
+      top[0]->Reshape(top_dims);
+
+      // In test model, the output number is one.
+      if (top.size() == 3) {
+        top[1]->CopyFrom(*bottom[bottom_index_["label"]], false, true);
+        top[2]->ReshapeLike(*bottom[bottom_index_["label"]]);
+        caffe_set(top[2]->count(), Dtype(0), top[2]->mutable_cpu_data());
+      }
+    } break;
+    case CPGParameter_Mode_INSTANCE_LABEL:
+    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
+      CHECK_EQ(top.size(), 1)
+          << "In instance_label mode, only out put one blob.";
+      vector<int> top_shape;
+      top_shape.push_back(num_roi_);
+      top[0]->Reshape(top_shape);
+    } break;
+    case CPGParameter_Mode_CPG_POOLING: {
+      vector<int> top_dims;
+      top_dims.push_back(num_roi_);
+      top_dims.push_back(num_class_);
+      top[0]->Reshape(top_dims);
+    } break;
+    case CPGParameter_Mode_CRF:
+      break;
+    default:
+      LOG(FATAL) << "Unknown mode.";
+  }
+
+  // shape fliter
+  vector<int> fliter_dims;
+  fliter_dims.push_back(num_roi_);
+  fliter_dims.push_back(num_class_);
+  fliter_.Reshape(fliter_dims);
+
   // shape bboxes_
-  vector<int> bboxes_shape;
-  bboxes_shape.push_back(max_bb_per_cls_);
-  bboxes_shape.push_back(4);
-  bboxes_->Reshape(bboxes_shape);
+  vector<int> bboxes_dims;
+  bboxes_dims.push_back(max_bb_per_cls_);
+  bboxes_dims.push_back(4);
+  bboxes_->Reshape(bboxes_dims);
 
-  channels_opg_ = bottom[bottom_opgs_index_]->channels();
-  height_im_ = bottom[bottom_opgs_index_]->height();
-  width_im_ = bottom[bottom_opgs_index_]->width();
-  opg_size_ = height_im_ * width_im_;
-
-  raw_opg_->Reshape(1, 1, height_im_, width_im_);
-
-  CHECK_EQ(bottom[bottom_predict_index_]->shape(0), num_im_)
+  // Do some check
+  CHECK_EQ(num_im_, 1) << "current only support one image per forward-backward";
+  CHECK_EQ(bottom[bottom_index_["predict"]]->shape(0), num_im_)
       << "#im should be the same";
-  CHECK_EQ(bottom[bottom_predict_index_]->shape(1), num_class_)
+  CHECK_EQ(bottom[bottom_index_["predict"]]->shape(1), num_class_)
       << "#class should be the same";
-  CHECK_EQ(bottom[bottom_predict_index_]->count(), num_im_ * num_class_)
+  CHECK_EQ(bottom[bottom_index_["predict"]]->count(), num_im_ * num_class_)
       << "size should be the same";
-  CHECK_EQ(bottom[bottom_label_index_]->count(), num_im_ * num_class_)
+  CHECK_EQ(bottom[bottom_index_["label"]]->count(), num_im_ * num_class_)
       << "size should be the same";
 
-  if (bottom.size() > bottom_io_index_) {
-    CHECK_EQ(bottom[bottom_filt_index_]->shape(0), num_roi_)
+  if (bottom_index_.find("io") != bottom_index_.end() &&
+      bottom.size() > bottom_index_["io"]) {
+    CHECK_EQ(bottom[bottom_index_["fliter"]]->shape(0), num_roi_)
         << "#roi should be the same";
-    CHECK_EQ(bottom[bottom_filt_index_]->shape(1), num_class_)
+    CHECK_EQ(bottom[bottom_index_["fliter"]]->shape(1), num_class_)
         << "#class should be the same";
-    CHECK_EQ(bottom[bottom_io_index_]->count(), 1) << "only need one IO ID";
+    CHECK_EQ(bottom[bottom_index_["io"]]->count(), 1) << "only need one IO ID";
   }
 }
 

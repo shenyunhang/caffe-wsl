@@ -13,7 +13,7 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   bottom_label_index_ = 0;
   bottom_predict_index_ = 1;
   bottom_rois_index_ = 2;
-  bottom_filt_index_ = 3;
+  bottom_filter_index_ = 3;
   bottom_io_index_ = 4;
 
   top_select_index_ = 0;
@@ -43,8 +43,8 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   repartition_bottom_vec_.push_back(bottom[bottom_rois_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_label_index_]);
   repartition_bottom_vec_.push_back(bottom[bottom_predict_index_]);
-  if (bottom.size() > bottom_filt_index_) {
-    repartition_bottom_vec_.push_back(bottom[bottom_filt_index_]);
+  if (bottom.size() > bottom_filter_index_) {
+    repartition_bottom_vec_.push_back(bottom[bottom_filter_index_]);
     repartition_bottom_vec_.push_back(bottom[bottom_io_index_]);
   }
   repartition_top_vec_.clear();

@@ -86,11 +86,13 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   CHECK_LT(start_layer_index_, end_layer_index_)
       << "OPGLayer: start_layer_index_ should below end_layer_index_";
 
-  if (opg_blob_name_.size() == 0) is_opg_ = false;
+  if (opg_blob_name_.size() == 0) {
+    is_opg_ = false;
+    LOG(INFO) << "Change is_opg to false, due to no opg_blob_name.";
+  }
 
   // find net blob
-  net_blob_init_ = true;
-  if (net_blob_init_) {
+  {
     LOG(INFO) << "finding net blob";
     // set im blob and predictiob blob
     const vector<int> start_bottom_ids = net_->bottom_ids(start_layer_index_);
@@ -113,10 +115,9 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       // opg_blob_.push_back(net_->blobs()[opg_top_ids[0]]);
       opg_blob_.push_back(net_->blobs()[opg_blob_index_[i]]);
     }
-
-    Get_split_top_blob();
-    net_blob_init_ = false;
   }
+
+  Get_split_top_blob();
 
   if (debug_info_) {
     voc_label_.push_back("aeroplane");
@@ -177,8 +178,8 @@ void OPGLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   // tmp shape top
   vector<int> top_shape;
+  top_shape.push_back(num_im_);
   top_shape.push_back(1);
-  top_shape.push_back(channels_opg_);
   top_shape.push_back(height_im_);
   top_shape.push_back(width_im_);
   top[0]->Reshape(top_shape);
@@ -203,10 +204,13 @@ void OPGLayer<Dtype>::After() {
   accum_gt_ += gt_class_.size();
   accum_bp_ += bp_class_.size();
   if (accum_im_ == 1280) {
-    LOG(INFO) << "#im: " << accum_im_ << " #bp: " << accum_bp_ << " #gt"
-              << accum_gt_;
+    LOG(INFO) << "#im: " << accum_im_ << " #bp: " << accum_bp_
+              << " #gt: " << accum_gt_;
+    accum_im_ = 0;
+    accum_gt_ = 0;
+    accum_bp_ = 0;
   }
-  save_id_+=num_im_;
+  save_id_ += num_im_;
 }
 
 #ifdef CPU_ONLY

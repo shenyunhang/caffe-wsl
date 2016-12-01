@@ -357,7 +357,6 @@ void OPGLayer<Dtype>::Clear_split_diff() {
 template <typename Dtype>
 bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
                                        const Dtype predict) {
-  // in softmax model, we assume the last class is background
   if (cls_id == ignore_label_) return false;
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
@@ -381,7 +380,9 @@ bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
 }
 
 template <typename Dtype>
-bool OPGLayer<Dtype>::Need_Order(const Dtype label, const Dtype predict) {
+bool OPGLayer<Dtype>::Need_Order(const int cls_id, const Dtype label,
+                                 const Dtype predict) {
+  if (cls_id == ignore_label_) return false;
   // assum score is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
     if (label < 0.5) return false;
@@ -468,6 +469,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   // Show info
   //-----------------------------------------------------------------------
   Show_info();
+  LOG_IF(INFO, debug_info_) << "------------------start-----------------------";
 
   //-----------------------------------------------------------------------
   // save the history param diff
@@ -485,19 +487,23 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
 
   bp_class_.clear();
   gt_class_.clear();
-  for (int i = 0; i < num_class_; ++i) {
-    int index = i;
-    if (Need_Repartition(i, bottom_label[index], predict_data[index])) {
-    } else if (Need_Order(bottom_label[index], predict_data[index])) {
+  for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
+    int index = cls_id;
+    LOG_IF(INFO, debug_info_) << "class: " << voc_label_[cls_id]
+                              << " label: " << bottom_label[index]
+                              << " score: " << predict_data[index];
+    if (Need_Repartition(cls_id, bottom_label[index], predict_data[index])) {
+    } else if (Need_Order(cls_id, bottom_label[index], predict_data[index])) {
     } else {
       continue;
     }
-    bp_class_.push_back(i);
-    gt_class_.push_back(i);
-    LOG_IF(INFO, debug_info_) << "gt class: " << voc_label_[i];
+    bp_class_.push_back(cls_id);
+    gt_class_.push_back(cls_id);
+    LOG_IF(INFO, debug_info_) << "gt class: " << voc_label_[cls_id];
   }
   if (gt_class_.size() == 0) {
     After();
+    LOG_IF(INFO, debug_info_) << "Nothing to BP ";
     return;
   }
 
@@ -532,12 +538,12 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   }
 
   // reshape top
-  vector<int> top_shape;
-  top_shape.push_back(num_gt);
-  top_shape.push_back(channels_opg_);
-  top_shape.push_back(height_im_);
-  top_shape.push_back(width_im_);
-  top[0]->Reshape(top_shape);
+  vector<int> top_dims;
+  top_dims.push_back(num_im_);
+  top_dims.push_back(num_gt);
+  top_dims.push_back(height_im_);
+  top_dims.push_back(width_im_);
+  top[0]->Reshape(top_dims);
   caffe_gpu_set(top[0]->count(), Dtype(0), top[0]->mutable_gpu_data());
   caffe_gpu_set(top[0]->count(), Dtype(0), top[0]->mutable_gpu_diff());
 
@@ -670,7 +676,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         opg_blob_[0]->shape(3) == width_im_) {
       caffe_copy(opg_size_,
                  raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, 0, 0, 0),
-                 top[0]->mutable_gpu_data() + top[0]->offset(gt_id, 0, 0, 0));
+                 top[0]->mutable_gpu_data() + top[0]->offset(0, gt_id, 0, 0));
     } else {
       // resize to image size and average
       // from opg_blob_ diff to data
@@ -700,9 +706,9 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                            raw_opg_->offset(gt_id, blob_id, 0, 0));
 
         caffe_gpu_add(
-            opg_size_, top[0]->gpu_data() + top[0]->offset(gt_id, 0, 0, 0),
+            opg_size_, top[0]->gpu_data() + top[0]->offset(0, gt_id, 0, 0),
             raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-            top[0]->mutable_gpu_data() + top[0]->offset(gt_id, 0, 0, 0));
+            top[0]->mutable_gpu_data() + top[0]->offset(0, gt_id, 0, 0));
         if (debug_info_) {
           Show_opg(
               raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
@@ -712,7 +718,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     }
 
     if (debug_info_) {
-      Show_opg(top[0]->cpu_data() + top[0]->offset(gt_id, 0, 0, 0),
+      Show_opg(top[0]->cpu_data() + top[0]->offset(0, gt_id, 0, 0),
                gt_class_[gt_id], "_fusion");
     }
 
