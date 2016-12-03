@@ -55,6 +55,10 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   save_id_ = 0;
   is_show_ = true;
 
+    accum_im_ = 0;
+    accum_gt_ = 0;
+    accum_bp_ = 0;
+
   history_params_.clear();
   history_blobs_.clear();
   is_history_init_ = false;

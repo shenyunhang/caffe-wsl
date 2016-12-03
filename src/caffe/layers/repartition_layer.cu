@@ -14,7 +14,8 @@ namespace caffe {
 template <typename Dtype>
 void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
                Blob<Dtype> *label_blob, const int save_id, const int num_im,
-               const vector<string> voc_label, const int ignore_label) {
+               const vector<string> voc_label, const int ignore_label,
+               const float predict_threshold) {
   const int num_roi = rois_blob->num();
   const int num_class = fliter_blob->channels();
   const Dtype *rois = rois_blob->cpu_data();
@@ -36,7 +37,7 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
   int each_page_num = 200;
 
   for (int c = 0; c < num_class; ++c) {
-    if (label[c] <= 0.5) {
+    if (label[c] <= predict_threshold) {
       continue;
     }
     if (c == ignore_label) {
@@ -630,15 +631,24 @@ __global__ void SumBBoxes(const int num_roi, const Dtype *const opg_data,
     const int wend = min(int(roi[3]), width);
     const int hend = min(int(roi[4]), height);
 
-    const int wstart_inner = max(int(roi[1] / 1.8), 0);
-    const int hstart_inner = max(int(roi[2] / 1.8), 0);
-    const int wend_inner = min(int(roi[3] / 1.8), width);
-    const int hend_inner = min(int(roi[4] / 1.8), height);
+    const Dtype height_roi = hend - hstart;
+    const Dtype width_roi = wend - wstart;
+    const Dtype height_roi_inner = 1.0 * height_roi / 1.8;
+    const Dtype width_roi_inner = 1.0 * width_roi / 1.8;
+    const Dtype height_roi_outer = 1.0 * height_roi * 1.8;
+    const Dtype width_roi_outer = 1.0 * width_roi * 1.8;
+    const Dtype wcenter = 1.0 * (wend + wstart) / 2;
+    const Dtype hcenter = 1.0 * (hend + hstart) / 2;
 
-    const int wstart_outer = max(int(roi[1] * 1.8), 0);
-    const int hstart_outer = max(int(roi[2] * 1.8), 0);
-    const int wend_outer = min(int(roi[3] * 1.8), width);
-    const int hend_outer = min(int(roi[4] * 1.8), height);
+    const int wstart_inner = max(int(wcenter - width_roi_inner / 2), 0);
+    const int hstart_inner = max(int(hcenter - height_roi_inner / 2), 0);
+    const int wend_inner = min(int(wcenter + width_roi_inner / 2), width);
+    const int hend_inner = min(int(hcenter + height_roi_inner / 2), height);
+
+    const int wstart_outer = max(int(wcenter - width_roi_outer / 2), 0);
+    const int hstart_outer = max(int(hcenter - height_roi_outer / 2), 0);
+    const int wend_outer = min(int(wcenter + width_roi_outer / 2), width);
+    const int hend_outer = min(int(hcenter + height_roi_outer / 2), height);
 
     Dtype sum = 0;
     Dtype sum_inner = 0;
@@ -666,29 +676,20 @@ __global__ void SumBBoxes(const int num_roi, const Dtype *const opg_data,
       }
     }
 
-    Dtype result = (sum - sum_inner) - (sum_outter - sum_inner);
-    top_data[rois_index * num_class + cls_id] = result > 0 ? result : 0;
+    Dtype area = (hend - hstart) * (wend - wstart);
+    Dtype area_inner =
+        (hend_inner - hstart_inner) * (wend_inner - wstart_inner);
+    Dtype area_outer =
+        (hend_outer - hstart_outer) * (wend_outer - wstart_outer);
+
+    Dtype area_frame = max(area - area_inner, Dtype(1));
+    Dtype area_context = max(area_outer - area, Dtype(1));
+
+    Dtype result =
+        (sum - sum_inner) / area_frame - (sum_outter - sum) / area_context;
+    top_data[rois_index * num_class + cls_id] = result > 0.0 ? result : 0.0;
   }
 }
-
-/*template <typename Dtype>*/
-/*__global__ void opg_sum(const int num_roi, const Dtype *const opg_data,*/
-/*const int channels_opg, const int height,*/
-/*const int width, const int offset_channel_opg,*/
-/*const int channels_sum, const int offset_channel_sum,*/
-/*const Dtype threshold, Dtype *const sum_data) {*/
-/*CUDA_KERNEL_LOOP(index, num_roi) {*/
-/*int opg_offset =*/
-/*(index * channels_opg + offset_channel_opg) * height * width;*/
-/*int sum_offset = index * channels_sum + offset_channel_sum;*/
-/*const Dtype *const opg_data_this = opg_data + opg_offset;*/
-/*sum_data[sum_offset] = 0;*/
-/*for (int i = 0; i < height * width; ++i) {*/
-/*sum_data[sum_offset] +=*/
-/*opg_data_this[i] > 0 ? opg_data_this[i] : -opg_data_this[i];*/
-/*}*/
-/*}*/
-/*}*/
 
 template <typename Dtype>
 bool RepartitionLayer<Dtype>::Need_Repartition(const int cls_id,
@@ -741,15 +742,12 @@ template <typename Dtype>
 void RepartitionLayer<Dtype>::After() {
   // this should not in the Reshape function
   // as Reshape function will be call before start
-  if (this->phase_ == TEST) {
-    return;
-  }
   total_im_ += num_im_;
   total_roi_ += num_roi_;
   accum_im_ += num_im_;
   accum_roi_ += num_roi_;
 
-  if (total_im_ % 1280 == 0) {
+  if (total_im_ % 1280 == 0 && this->phase_ != TEST) {
     LOG(INFO) << "#im: " << total_im_ << " #label: " << total_label_
               << " #roi: " << total_roi_ << " #roi_l: " << total_roi_l_
               << " #roi/#num: " << total_roi_ / total_im_
@@ -976,25 +974,42 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
              bottom_rois, num_class_, cls_id, 0, 0, 0,
              fliter_.mutable_gpu_data());
 
-        // left top k
-        Dtype *fliter_data = fliter_.mutable_cpu_data();
-        for (int k = 0; k < 10; ++k) {
+        // normalization to (0,1)
+        if (true) {
+          Dtype *fliter_data = fliter_.mutable_cpu_data();
           Dtype max_value = 0;
-          int max_id = -1;
           for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
             if (fliter_data[roi_id * num_class_ + cls_id] > max_value) {
               max_value = fliter_data[roi_id * num_class_ + cls_id];
-              max_id = roi_id * num_class_ + cls_id;
             }
           }
-          fliter_data[max_id] = -1;
+
+          for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+            fliter_data[roi_id * num_class_ + cls_id] /= max_value;
+          }
         }
 
-        for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
-          if (fliter_data[roi_id * num_class_ + cls_id] == -1) {
-            fliter_data[roi_id * num_class_ + cls_id] = 1;
-          } else {
-            fliter_data[roi_id * num_class_ + cls_id] = 0;
+        // left top k
+        if (false) {
+          Dtype *fliter_data = fliter_.mutable_cpu_data();
+          for (int k = 0; k < 100; ++k) {
+            Dtype max_value = 0;
+            int max_id = -1;
+            for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+              if (fliter_data[roi_id * num_class_ + cls_id] > max_value) {
+                max_value = fliter_data[roi_id * num_class_ + cls_id];
+                max_id = roi_id * num_class_ + cls_id;
+              }
+            }
+            fliter_data[max_id] = -1;
+          }
+
+          for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+            if (fliter_data[roi_id * num_class_ + cls_id] == -1) {
+              fliter_data[roi_id * num_class_ + cls_id] = 1;
+            } else {
+              fliter_data[roi_id * num_class_ + cls_id] = 0;
+            }
           }
         }
 
@@ -1012,7 +1027,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   if (debug_info_) {
     Show_rois(bottom[bottom_index_["rois"]], &fliter_,
               bottom[bottom_index_["label"]], total_im_, num_im_, voc_label_,
-              ignore_label_);
+              ignore_label_, predict_threshold_);
   }
 
   // get the final output from fliter

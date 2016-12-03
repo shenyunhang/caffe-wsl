@@ -147,6 +147,7 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_INSTANCE_LABEL:
     case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
+    case CPGParameter_Mode_CPG_POOLING:
       bottom_index_["opg"] = 0;
       bottom_index_["rois"] = 1;
       bottom_index_["label"] = 2;
@@ -165,13 +166,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
           << "bottom nums are not the same.";
 
       break;
-    case CPGParameter_Mode_CPG_POOLING:
-      bottom_index_["opg"] = 0;
-      bottom_index_["rois"] = 1;
-      bottom_index_["label"] = 2;
-      bottom_index_["predict"] = 3;
-
-      break;
     case CPGParameter_Mode_CRF:
       LOG(FATAL) << "Not yet.";
       break;
@@ -186,7 +180,8 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   // shape top
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_DEFAULT:
-    case CPGParameter_Mode_PRED: {
+    case CPGParameter_Mode_PRED:
+    case CPGParameter_Mode_CPG_POOLING: {
       vector<int> top_dims;
       top_dims.push_back(num_roi_);
       top_dims.push_back(num_class_);
@@ -206,12 +201,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       vector<int> top_shape;
       top_shape.push_back(num_roi_);
       top[0]->Reshape(top_shape);
-    } break;
-    case CPGParameter_Mode_CPG_POOLING: {
-      vector<int> top_dims;
-      top_dims.push_back(num_roi_);
-      top_dims.push_back(num_class_);
-      top[0]->Reshape(top_dims);
     } break;
     case CPGParameter_Mode_CRF:
       break;
