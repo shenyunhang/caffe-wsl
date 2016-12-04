@@ -22,6 +22,9 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
   const Dtype *fliter = fliter_blob->cpu_data();
   const Dtype *label = label_blob->cpu_data();
 
+  const int line_width = 1;
+  /*const int line_width=4;*/
+
   cv::RNG rng(12345);
   int num_draw = 0;
 
@@ -34,7 +37,7 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
   cv::Mat im_mat_l;
   cv::Mat im_mat_a;
 
-  int each_page_num = 200;
+  int each_page_num = 20;
 
   for (int c = 0; c < num_class; ++c) {
     if (label[c] <= predict_threshold) {
@@ -59,14 +62,14 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
                     cv::Point(rois[5 * r + 3], rois[5 * r + 4]),
                     cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
                                rng.uniform(0, 255)),
-                    4);
+                    line_width);
 
-      if (fliter[r * num_class + c] == 1) {
+      if (fliter[r * num_class + c] >= 0.5) {
         cv::rectangle(im_mat_l, cv::Point(rois[5 * r + 1], rois[5 * r + 2]),
                       cv::Point(rois[5 * r + 3], rois[5 * r + 4]),
                       cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
                                  rng.uniform(0, 255)),
-                      4);
+                      line_width);
         num_draw++;
 
       } else {
@@ -74,14 +77,14 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
                       cv::Point(rois[5 * r + 3], rois[5 * r + 4]),
                       cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
                                  rng.uniform(0, 255)),
-                      4);
+                      line_width);
       }
 
       if (r % each_page_num == each_page_num - 1) {
-        stringstream save_path_o;
-        save_path_o << "tmp/" << save_id << "_" << voc_label[c] << "_rois_"
-                    << page << "_o.png";
-        cv::imwrite(save_path_o.str(), im_mat_o);
+        /*stringstream save_path_o;*/
+        /*save_path_o << "tmp/" << save_id << "_" << voc_label[c] << "_rois_"*/
+        /*<< page << "_o.png";*/
+        /*cv::imwrite(save_path_o.str(), im_mat_o);*/
 
         stringstream save_path_l;
         save_path_l << "tmp/" << save_id << "_" << voc_label[c] << "_rois_"
@@ -96,10 +99,10 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
     }
 
     if (num_roi % each_page_num != each_page_num) {
-      stringstream save_path_o;
-      save_path_o << "tmp/" << save_id << "_" << voc_label[c] << "_rois_"
-                  << page << "_o.png";
-      cv::imwrite(save_path_o.str(), im_mat_o);
+      /*stringstream save_path_o;*/
+      /*save_path_o << "tmp/" << save_id << "_" << voc_label[c] << "_rois_"*/
+      /*<< page << "_o.png";*/
+      /*cv::imwrite(save_path_o.str(), im_mat_o);*/
 
       stringstream save_path_l;
       save_path_l << "tmp/" << save_id << "_" << voc_label[c] << "_rois_"
@@ -637,8 +640,8 @@ __global__ void SumBBoxes(const int num_roi, const Dtype *const opg_data,
     const Dtype width_roi_inner = 1.0 * width_roi / 1.8;
     const Dtype height_roi_outer = 1.0 * height_roi * 1.8;
     const Dtype width_roi_outer = 1.0 * width_roi * 1.8;
-    const Dtype wcenter = 1.0 * (wend + wstart) / 2;
     const Dtype hcenter = 1.0 * (hend + hstart) / 2;
+    const Dtype wcenter = 1.0 * (wend + wstart) / 2;
 
     const int wstart_inner = max(int(wcenter - width_roi_inner / 2), 0);
     const int hstart_inner = max(int(hcenter - height_roi_inner / 2), 0);
@@ -656,22 +659,26 @@ __global__ void SumBBoxes(const int num_roi, const Dtype *const opg_data,
     for (int c = 0; c < channels; ++c) {
       const Dtype *gradient = opg_data + c * height * width;
 
-      for (int h = 0; h < height; ++h) {
-        for (int w = 0; w < width; ++w) {
+      for (int h = hstart_outer; h < hend_outer; ++h) {
+        for (int w = wstart_outer; w < wend_outer; ++w) {
+          Dtype g = gradient[h * width + w];
+          if (g < threshold) {
+            continue;
+          }
 
           if (h > hstart && h < hend && w > wstart && w < wend) {
-            sum += gradient[h * width + w];
+            /*sum += g;*/
+            sum++;
           }
 
           if (h > hstart_inner && h < hend_inner && w > wstart_inner &&
               w < wend_inner) {
-            sum_inner += gradient[h * width + w];
+            /*sum_inner += g;*/
+            sum_inner++;
           }
 
-          if (h > hstart_outer && h < hend_outer && w > wstart_outer &&
-              w < wend_outer) {
-            sum_outter += gradient[h * width + w];
-          }
+          /*sum_outter += g;*/
+          sum_outter++;
         }
       }
     }
@@ -685,8 +692,8 @@ __global__ void SumBBoxes(const int num_roi, const Dtype *const opg_data,
     Dtype area_frame = max(area - area_inner, Dtype(1));
     Dtype area_context = max(area_outer - area, Dtype(1));
 
-    Dtype result =
-        (sum - sum_inner) / area_frame - (sum_outter - sum) / area_context;
+    Dtype result = (sum - sum_inner) / sqrt(area_frame) -
+                   (sum_outter - sum) / sqrt(area_context);
     top_data[rois_index * num_class + cls_id] = result > 0.0 ? result : 0.0;
   }
 }
@@ -966,12 +973,15 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
              fliter_.mutable_gpu_data());
       } break;
       case CPGParameter_Mode_CPG_POOLING: {
+        const Dtype maxval =
+            caffe_cpu_max_element(opg_size_, raw_data_->cpu_data());
+        const Dtype threshold = maxval * fg_threshold_;
         LOG_IF(INFO, debug_info_) << "SumBBoxes:";
         // NOLINT_NEXT_LINE(whitespace/operators)
         SumBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
                              CAFFE_CUDA_NUM_THREADS>>>
             (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
-             bottom_rois, num_class_, cls_id, 0, 0, 0,
+             bottom_rois, num_class_, cls_id, threshold, 0, 0,
              fliter_.mutable_gpu_data());
 
         // normalization to (0,1)
