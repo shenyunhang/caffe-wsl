@@ -17,6 +17,7 @@
 namespace caffe {
 
 const float kLOG_THRESHOLD = 1e-20;
+const float kMIN_SCORE = -1.0 * 1e20;
 
 template <typename Dtype>
 class RepartitionLayer : public Layer<Dtype> {
@@ -48,7 +49,6 @@ class RepartitionLayer : public Layer<Dtype> {
   void Score_map_crf();
   void InitFilter(const Dtype* const label_gpu_data, Dtype* const top_gpu_data);
   void After();
-  bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
   bool Need_Order(const int cls_id, const Dtype label, const Dtype score);
 
  protected:
@@ -77,19 +77,12 @@ class RepartitionLayer : public Layer<Dtype> {
   float mass_threshold_;
   float density_threshold_;
 
-  map<string,int> bottom_index_;
+  map<string, int> bottom_index_;
   Blob<Dtype>* raw_data_;
   Blob<Dtype> filter_;
 
-  int total_im_;
-  int total_roi_;
-  int total_roi_l_;
-  int total_label_;
-
-  int accum_im_;
-  int accum_roi_;
-  int accum_roi_l_;
-  int accum_label_;
+  int display_;
+  int pass_im_;
 
   int order_K_;
   float order_threshold_;

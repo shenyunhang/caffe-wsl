@@ -38,13 +38,14 @@ class CrossEntropyLossLayer : public LossLayer<Dtype> {
   int ignore_label_;
   int ignore_value_;
 
-  Dtype total_loss_;
-  int total_iter_;
-  int total_ignore_num_;
+  Dtype accum_loss_;
+  int accum_iter_;
+  int accum_ignore_num_;
 
   int count_;
   int num_im_;
   int num_class_;
+
 };
 
 }  // namespace caffe

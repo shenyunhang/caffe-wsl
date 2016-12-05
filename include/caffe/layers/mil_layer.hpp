@@ -10,11 +10,6 @@
 
 namespace caffe {
 
-/**
- * @brief
- *
- * TODO(YH):
- */
 template <typename Dtype>
 class MILLayer : public Layer<Dtype> {
  public:
@@ -25,10 +20,10 @@ class MILLayer : public Layer<Dtype> {
                        const vector<Blob<Dtype>*>& top);
 
   virtual inline const char* type() const { return "MIL"; }
-  //virtual inline int ExactNumBottomBlobs() const { return 1; }
+  // virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int MaxNumBottomBlobs() const { return 5; }
   virtual inline int MinNumBottomBlobs() const { return 3; }
-  //virtual inline int ExactNumTopBlobs() const { return 1; }
+  // virtual inline int ExactNumTopBlobs() const { return 1; }
   virtual inline int MaxNumTopBlobs() const { return 3; }
   virtual inline int MinNumTopBlobs() const { return 1; }
 
@@ -51,15 +46,8 @@ class MILLayer : public Layer<Dtype> {
 
   Net<Dtype>* net_;
 
-  int bottom_label_index_;
-  int bottom_predict_index_;
-  int bottom_rois_index_;
-  int bottom_filter_index_;
-  int bottom_io_index_;
-
-  int top_select_index_;
-  int top_poslabel_index_;
-  int top_neglabel_index_;
+  map<string, int> bottom_index_;
+  map<string, int> top_index_;
 
   shared_ptr<Layer<Dtype> > cpg_layer_;
   vector<Blob<Dtype>*> cpg_bottom_vec_;

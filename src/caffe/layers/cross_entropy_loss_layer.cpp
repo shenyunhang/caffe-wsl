@@ -16,9 +16,10 @@ void CrossEntropyLossLayer<Dtype>::LayerSetUp(
   ignore_label_ = this_layer_param.ignore_label();
   ignore_value_ = this_layer_param.ignore_value();
 
-  total_loss_ = 0;
-  total_iter_ = 0;
-  total_ignore_num_ = 0;
+  accum_loss_ = 0;
+  accum_iter_ = 0;
+  accum_ignore_num_ = 0;
+  num_class_ = bottom[0]->channels();
 }
 
 template <typename Dtype>
@@ -28,7 +29,7 @@ void CrossEntropyLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   count_ = bottom[0]->count();
   num_im_ = bottom[0]->num();
-  num_class_ = bottom[0]->channels();
+  CHECK_EQ(num_class_, bottom[0]->channels()) << "channels had changed.";
   CHECK_EQ(bottom[0]->count(), bottom[1]->count())
       << "CROSS_ENTROPY_LOSS layer inputs must have the same count.";
 }
@@ -42,11 +43,11 @@ void CrossEntropyLossLayer<Dtype>::Forward_cpu(
   Dtype loss = 0;
   for (int i = 0; i < count_; ++i) {
     if (target[i] == ignore_value_) {
-      total_ignore_num_++;
+      accum_ignore_num_++;
       continue;
     }
     if (i % num_class_ == ignore_label_) {
-      total_ignore_num_++;
+      accum_ignore_num_++;
       continue;
     }
     Dtype prob = std::max(input_data[i], Dtype(kLOG_THRESHOLD));
@@ -55,15 +56,15 @@ void CrossEntropyLossLayer<Dtype>::Forward_cpu(
   }
   top[0]->mutable_cpu_data()[0] = loss / num_im_;
 
-  total_loss_ += loss / num_im_;
-  total_iter_++;
-  if (total_iter_ % display_ == 0) {
-    LOG(INFO) << this->layer_param().name() << " #iter_: " << total_iter_
-              << " #ignore: " << total_ignore_num_ << " #loss_: " << total_loss_
-              << " AVE loss: " << total_loss_ / total_iter_;
-    total_loss_ = 0;
-    total_iter_ = 0;
-    total_ignore_num_ = 0;
+  accum_loss_ += loss / num_im_;
+  accum_iter_++;
+  if (accum_iter_ % display_ == 0) {
+    LOG(INFO) << this->layer_param().name() << " #iter_: " << accum_iter_
+              << " #ignore: " << accum_ignore_num_ << " #loss_: " << accum_loss_
+              << " AVE loss: " << accum_loss_ / accum_iter_;
+    accum_loss_ = 0;
+    accum_iter_ = 0;
+    accum_ignore_num_ = 0;
   }
 }
 

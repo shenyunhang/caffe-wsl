@@ -1,5 +1,6 @@
 #include <vector>
 #include <time.h>
+#include <boost/filesystem.hpp>
 
 #include "caffe/layers/opg_layer.hpp"
 #include "caffe/util/interp.hpp"
@@ -208,22 +209,25 @@ void OPGLayer<Dtype>::Restore_param_diff() {
 
 template <typename Dtype>
 void Show_blob(const Dtype *data, const int channels, const int height,
-               const int width, const string save_opg_path,
-               const float threshold, const int fill = 0) {
+               const int width, const string save_path,
+               const string save_path_jet, const float threshold_ratio,
+               const bool radioactive = false, const int fill = 0) {
+  int rec_size = max(height, width) * 0.01;
   Dtype maxval = caffe_cpu_max_element(channels * height * width, data);
   Dtype sum = caffe_cpu_sum(channels * height * width, data);
-  Dtype raw_mean = sum / channels / height / width;
-  Dtype raw_maxval = maxval;
+  Dtype mean = sum / channels / height / width;
 
-  if (threshold > 0) {
-    maxval = maxval * threshold;
+  Dtype threshold_value;
+  if (threshold_ratio > 0) {
+    threshold_value = maxval * threshold_ratio;
   } else {
-    maxval = sum / channels / height / width;
+    threshold_value = sum / channels / height / width;
   }
-  Dtype scale_factor = 255.0 / maxval;
+  Dtype scale_factor = 255.0 / threshold_value;
 
   //-----------------------------------------------------------------------
   cv::Mat opg_mat;
+  cv::Mat opg_mat_jet;
   if (channels == 3) {
     opg_mat = cv::Mat(height, width, CV_8UC3);
   } else if (channels == 1) {
@@ -232,83 +236,124 @@ void Show_blob(const Dtype *data, const int channels, const int height,
     LOG(FATAL) << "channels should 1 or 3";
   }
 
-  sum = 0;
   uchar *opg_mat_data = opg_mat.data;
   for (int c = 0; c < channels; c++) {
     for (int h = 0; h < height; h++) {
       for (int w = 0; w < width; w++) {
         int index = (c * height + h) * width + w;
         int index_mat = (h * width + w) * channels + c;
-        /*Dtype value = abs(data[index]);*/
-        Dtype value = data[index] > 0 ? data[index] : 0;
-        if (value > maxval) {
+        Dtype value = abs(data[index]);
+        // Dtype value = data[index] > 0 ? data[index] : 0;
+        if (value >= threshold_value) {
           opg_mat_data[index_mat] = 255;
-          sum += maxval;
+          //-----------------------------------------------------------------------
+          if (radioactive) {
+            for (int cc = 0; cc < channels; cc++) {
+              for (int hh = max(h - rec_size, 0);
+                   hh < min(h + rec_size, height); ++hh) {
+                for (int ww = max(w - rec_size, 0);
+                     ww < min(w + rec_size, width); ++ww) {
+                  int index_mat_r = (hh * width + ww) * channels + cc;
+                  opg_mat_data[index_mat_r] = 255;
+
+                  // int index_r = (cc * height + hh) * width + ww;
+                  // Dtype value_r = abs(data[index_r]);
+                  // if (value_r > threshold_value) {
+                  // for (int ccc = 0; ccc < channels; ccc++) {
+                  // for (int hhh = min(h, hh); hhh <= max(h, hh); ++hhh) {
+                  // for (int www = min(w, ww); www <= max(w, ww); ++www) {
+                  // int index_mat_r =
+                  //(hhh * width + www) * channels + ccc;
+                  // opg_mat_data[index_mat_r] = 255;
+                  //}
+                  //}
+                  //}
+                  //}
+                }
+              }
+            }
+          }
+          //-----------------------------------------------------------------------
         } else {
           if (fill >= 0) {
             opg_mat_data[index_mat] = fill;
           } else {
             opg_mat_data[index_mat] = scale_factor * value;
           }
-          sum += value;
         }
       }
     }
   }
 
-  cv::imwrite(save_opg_path, opg_mat);
-  LOG(INFO) << "threshold: " << threshold << " raw_maxval: " << raw_maxval
-            << " raw_mean: " << raw_mean << " max_value: " << maxval
-            << " mean: " << sum / channels / height / width;
+  cv::imwrite(save_path, opg_mat);
+  LOG(INFO) << "radioactive: " << radioactive
+            << " threshold_ratio: " << threshold_ratio
+            << " threshold_value: " << threshold_value << " maxval: " << maxval
+            << " mean: " << mean;
+  LOG(INFO) << "save_path: " << save_path;
+
+  // cv::applyColorMap(opg_mat, opg_mat_jet, cv::COLORMAP_JET);
+  // cv::imwrite(save_path_jet, opg_mat_jet);
+
+  //-----------------------------------------------------------------------
 
   //-----------------------------------------------------------------------
   // show the distubution of opg_blob data
-  int total[26];
-  for (int i = 0; i < 26; ++i) {
-    total[i] = 0;
-  }
-  for (int e = 0; e < channels * height * width; e++) {
-    int level = int(data[e] / 10);
-    total[level]++;
-  }
-  for (int i = 0; i < 26; ++i) {
-    std::cout << i << ":" << total[i] << " ";
-  }
-  std::cout << std::endl;
-  //-----------------------------------------------------------------------
+  // int total[26];
+  // for (int i = 0; i < 26; ++i) {
+  // total[i] = 0;
+  //}
+  // for (int e = 0; e < channels * height * width; e++) {
+  // int level = int(data[e] / 10);
+  // total[level]++;
+  //}
+  // for (int i = 0; i < 26; ++i) {
+  // std::cout << i << ":" << total[i] << " ";
+  //}
+  // std::cout << std::endl;
+  ////-----------------------------------------------------------------------
 }
 
 template <typename Dtype>
 void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
                                const string info) {
+  // 除了原始OPG外，高于阈值的像素点用255表示，低于阈值的像素点用0表示
   LOG(INFO) << "label: " << current_label << " info: " << info;
   // string save_subdir = currentDateTime();
-  string save_subdir = "";
-  stringstream save_opg_path;
-  save_opg_path << "tmp/" << save_subdir << "/" << save_id_ << "_"
-                << voc_label_[current_label] << "_opg_o" << info << ".png";
-  Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_opg_path.str(),
-            1, -1);
+  stringstream save_dir;
+  save_dir << "tmp/" << voc_label_[current_label] << "/" << save_id_ << "/";
+  boost::filesystem::create_directories(save_dir.str());
 
-  stringstream save_opg_path0;
-  save_opg_path0 << "tmp/" << save_subdir << "/" << save_id_ << "_"
-                 << voc_label_[current_label] << "_opg_0" << info << ".png";
-  Show_blob(opg_data, channels_opg_, height_im_, width_im_,
-            save_opg_path0.str(), 0);
+  stringstream save_path;
+  stringstream save_path_jet;
+  save_path << save_dir.str() << "_o" << info << ".png";
+  save_path_jet << save_dir.str() << "_o" << info << "_jet.png";
+  Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+            save_path_jet.str(), 1, false, -1);
 
-  stringstream save_opg_path1;
-  save_opg_path1 << "tmp/" << save_subdir << "/" << save_id_ << "_"
-                 << voc_label_[current_label] << "_opg_fg" << info << ".png";
-  Show_blob(opg_data, channels_opg_, height_im_, width_im_,
-            save_opg_path1.str(), 0.1);
+  save_path.str(std::string());
+  save_path_jet.str(std::string());
+  save_path << save_dir.str() << "_0" << info << ".png";
+  save_path_jet << save_dir.str() << "_0" << info << "_jet.png";
+  Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+            save_path_jet.str(), 0, false);
 
-  for (int t = 0; t < 4; ++t) {
-    stringstream save_opg_path2;
-    save_opg_path2 << "tmp/" << save_subdir << "/" << save_id_ << "_"
-                   << voc_label_[current_label] << "_opg_" << pow(10, -t)
-                   << info << ".png";
-    Show_blob(opg_data, channels_opg_, height_im_, width_im_,
-              save_opg_path2.str(), pow(10, -t));
+  for (int t = 1; t < 4; ++t) {
+    save_path.str(std::string());
+    save_path_jet.str(std::string());
+    save_path << save_dir.str() << "_" << pow(10, -t) << info << ".png";
+    save_path_jet << save_dir.str() << "_" << pow(10, -t) << info << "_jet.png";
+    Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+              save_path_jet.str(), pow(10, -t), false);
+
+    save_path.str(std::string());
+    save_path_jet.str(std::string());
+    save_path << save_dir.str() << "_" << pow(10, -t) << "_ra" << info
+              << ".png";
+    save_path_jet << save_dir.str() << "_" << pow(10, -t) << "_ra" << info
+                  << "_jet.png";
+    Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+              save_path_jet.str(), pow(10, -t), true);
   }
 }
 
@@ -444,6 +489,32 @@ void OPGLayer<Dtype>::OPG_back() {
 }
 
 template <typename Dtype>
+__global__ void filter_kernel(const int count, const Dtype *const in,
+                              const int height, const int width,
+                              Dtype *const out) {
+  CUDA_KERNEL_LOOP(index, count) {
+    const int h = index / width;
+    const int w = index % width;
+
+    const int offset = 1;
+    const int hstart = max(h - offset, 0);
+    const int hend = min(h + offset, height - 1);
+    const int wstart = max(w - offset, 0);
+    const int wend = min(w + offset, width - 1);
+
+    Dtype sum = 0;
+    Dtype scale = 0;
+    for (int i = hstart; i <= hend; ++i) {
+      for (int j = wstart; j <= wend; ++j) {
+        sum += in[i * width + j];
+        scale++;
+      }
+      out[index] = sum / scale;
+    }
+  }
+}
+
+template <typename Dtype>
 __global__ void Do_threshold(const int count, Dtype *const data,
                              const Dtype thr, const Dtype rep) {
   CUDA_KERNEL_LOOP(index, count) {
@@ -470,6 +541,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   //-----------------------------------------------------------------------
   Show_info();
   LOG_IF(INFO, debug_info_) << "------------------start-----------------------";
+  LOG_IF(INFO, debug_info_) << "save_id_: " << save_id_;
 
   //-----------------------------------------------------------------------
   // save the history param diff
@@ -490,7 +562,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
     int index = cls_id;
     LOG_IF(INFO, debug_info_) << "class: " << voc_label_[cls_id]
-                              << " label: " << bottom_label[index]
+                              << "\t\tlabel: " << bottom_label[index]
                               << " score: " << predict_data[index];
     if (Need_Repartition(cls_id, bottom_label[index], predict_data[index])) {
     } else if (Need_Order(cls_id, bottom_label[index], predict_data[index])) {
@@ -507,11 +579,8 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     return;
   }
 
-  int num_gt = gt_class_.size();
-  int num_bp;
   if (is_contrast_) {
-    num_bp = num_gt > 3 ? num_gt : 3;
-    while (bp_class_.size() < num_bp) {
+    while (bp_class_.size() < 3) {
       Dtype max_score = -FLT_MAX;
       int max_id = -1;
       for (int i = 0; i < num_class_; ++i) {
@@ -532,23 +601,10 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       bp_class_.push_back(max_id);
       LOG_IF(INFO, debug_info_) << "addition class: " << voc_label_[max_id];
     }
-
-  } else {
-    num_bp = num_gt;
   }
 
-  // reshape top
-  vector<int> top_dims;
-  top_dims.push_back(num_im_);
-  top_dims.push_back(num_gt);
-  top_dims.push_back(height_im_);
-  top_dims.push_back(width_im_);
-  top[0]->Reshape(top_dims);
-  caffe_gpu_set(top[0]->count(), Dtype(0), top[0]->mutable_gpu_data());
-  caffe_gpu_set(top[0]->count(), Dtype(0), top[0]->mutable_gpu_diff());
-
   // shape the blob to save opg_blob
-  raw_opg_->Reshape(num_bp, opg_blob_.size(), height_im_, width_im_);
+  raw_opg_->Reshape(bp_class_.size(), opg_blob_.size(), height_im_, width_im_);
   caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_data());
   caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_diff());
 
@@ -574,7 +630,6 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     } else {
     }
 
-    // TODO(YH): those code should update if we need CPG in testing.
     // if test, we always try find cache first
     if (this->phase_ == TEST && false) {
       bool is_back = false;
@@ -600,6 +655,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       if (is_back) {
         OPG_back();
 
+        boost::filesystem::create_directories("data/opg_cache_test");
         for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
           cache_path.str(string());
           cache_path << "data/opg_cache_test/" << save_id_ << "_"
@@ -617,28 +673,42 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       OPG_back();
     }
 
-    // maximum along channel and save to raw_opg_
+    // maximum along channel and save to raw_opg_ diff
     for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
-      const int channel_size =
+      const int channels_num_this = opg_blob_[blob_id]->shape(1);
+      const int channel_size_this =
           opg_blob_[blob_id]->shape(2) * opg_blob_[blob_id]->shape(3);
-      caffe_gpu_maximum(channel_size, opg_blob_[blob_id]->gpu_diff(),
-                        opg_blob_[blob_id]->mutable_gpu_diff(), channel_size,
-                        opg_blob_[blob_id]->count());
 
-      // copy
-      if (is_contrast_) {
-        caffe_copy(channel_size, opg_blob_[blob_id]->gpu_diff(),
-                   raw_opg_->mutable_gpu_data() +
-                       raw_opg_->offset(bp_id, blob_id, 0, 0));
-      } else {
-        caffe_copy(channel_size, opg_blob_[blob_id]->gpu_diff(),
+      caffe_gpu_abs(opg_blob_[blob_id]->count(), opg_blob_[blob_id]->gpu_diff(),
+                    opg_blob_[blob_id]->mutable_gpu_diff());
+
+      if (channels_num_this == 1) {
+        caffe_copy(channel_size_this, opg_blob_[blob_id]->gpu_diff(),
                    raw_opg_->mutable_gpu_diff() +
                        raw_opg_->offset(bp_id, blob_id, 0, 0));
+      } else {
+        caffe_gpu_maximum(
+            channel_size_this,
+            opg_blob_[blob_id]->gpu_diff() + channel_size_this * 0,
+            opg_blob_[blob_id]->gpu_diff() + channel_size_this * 1,
+            raw_opg_->mutable_gpu_diff() +
+                raw_opg_->offset(bp_id, blob_id, 0, 0));
+
+        for (int i = 2; i < channels_num_this; ++i) {
+          caffe_gpu_maximum(
+              channel_size_this,
+              opg_blob_[blob_id]->gpu_diff() + channel_size_this * i,
+              raw_opg_->gpu_diff() + raw_opg_->offset(bp_id, blob_id, 0, 0),
+              raw_opg_->mutable_gpu_diff() +
+                  raw_opg_->offset(bp_id, blob_id, 0, 0));
+        }
       }
     }
   }
 
   if (is_contrast_) {
+    caffe_copy(raw_opg_->count(), raw_opg_->gpu_diff(),
+               raw_opg_->mutable_gpu_data());
     for (size_t gt_id = 0; gt_id < gt_class_.size(); ++gt_id) {
       for (size_t bp_id = 0; bp_id < bp_class_.size(); ++bp_id) {
         if (gt_id == bp_id) continue;
@@ -672,11 +742,12 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   }
 
   for (size_t gt_id = 0; gt_id < gt_class_.size(); ++gt_id) {
+    int cls_id = gt_class_[gt_id];
     if (opg_blob_.size() == 1 && opg_blob_[0]->shape(2) == height_im_ &&
         opg_blob_[0]->shape(3) == width_im_) {
       caffe_copy(opg_size_,
                  raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, 0, 0, 0),
-                 top[0]->mutable_gpu_data() + top[0]->offset(0, gt_id, 0, 0));
+                 top[0]->mutable_gpu_data() + top[0]->offset(0, cls_id, 0, 0));
     } else {
       // resize to image size and average
       // from opg_blob_ diff to data
@@ -697,38 +768,57 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
               0, 0, height_im_, width_im_, height_im_, width_im_);
         }
 
-        Dtype maxval = caffe_cpu_max_element(
-            opg_size_,
-            raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0));
+        int max_value_index;
+        caffe_gpu_amax(opg_size_, raw_opg_->gpu_data() +
+                                      raw_opg_->offset(gt_id, blob_id, 0, 0),
+                       &max_value_index);
+        max_value_index--;
+        const Dtype maxval =
+            *(raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0) +
+              max_value_index);
 
         caffe_gpu_scal(opg_size_, Dtype(1.0 / maxval),
                        raw_opg_->mutable_gpu_data() +
                            raw_opg_->offset(gt_id, blob_id, 0, 0));
 
         caffe_gpu_add(
-            opg_size_, top[0]->gpu_data() + top[0]->offset(0, gt_id, 0, 0),
+            opg_size_, top[0]->gpu_data() + top[0]->offset(0, cls_id, 0, 0),
             raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-            top[0]->mutable_gpu_data() + top[0]->offset(0, gt_id, 0, 0));
+            top[0]->mutable_gpu_data() + top[0]->offset(0, cls_id, 0, 0));
         if (debug_info_) {
           Show_opg(
               raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-              gt_class_[gt_id], "_" + opg_blob_name_[blob_id]);
+              cls_id, "_" + opg_blob_name_[blob_id]);
         }
       }
     }
 
-    if (debug_info_) {
-      Show_opg(top[0]->cpu_data() + top[0]->offset(0, gt_id, 0, 0),
-               gt_class_[gt_id], "_fusion");
+    // 平滑滤波
+    if (false) {
+      const int top_offset = top[0]->height() * top[0]->width();
+      // NOLINT_NEXT_LINE(whitespace/operators)
+      for (int i = 0; i < top[0]->num() * top[0]->channels(); ++i) {
+        filter_kernel<Dtype> << <CAFFE_GET_BLOCKS(top_offset),
+                                 CAFFE_CUDA_NUM_THREADS>>>
+            (top_offset, top[0]->gpu_data() + i * top_offset, top[0]->height(),
+             top[0]->width(), top[0]->mutable_gpu_diff() + i * top_offset);
+      }
+      caffe_copy(top[0]->count(), top[0]->gpu_diff(),
+                 top[0]->mutable_gpu_data());
     }
 
-    /*//-----------------------------------------------------------------------*/
+    if (debug_info_) {
+      Show_opg(top[0]->cpu_data() + top[0]->offset(0, cls_id, 0, 0), cls_id,
+               "_fusion");
+    }
+
+    //-----------------------------------------------------------------------
   }
 
   //-----------------------------------------------------------------------
   // restore history param diff
   //-----------------------------------------------------------------------
-  /*Restore_param_diff();*/
+  // Restore_param_diff();
 
   After();
 }

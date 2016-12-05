@@ -16,14 +16,7 @@
 #include "caffe/util/insert_splits.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/util/upgrade_proto.hpp"
-<<<<<<< HEAD
-#include "caffe/layers/opg_layer.hpp"
-=======
-
-#include "caffe/test/test_caffe_main.hpp"
-
 #include "caffe/layers/mil_layer.hpp"
->>>>>>> 1125 msra: use opg in our net
 
 namespace caffe {
 
@@ -91,8 +84,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     
     if(layer_param.type().compare("MIL")==0){
         int index=layers_.size()-1;
-	shared_ptr<OPGROISelectLayer<Dtype> > mil=boost::dynamic_pointer_cast<MILLayer<Dtype> >(layers_[index]);
-	mil->Set_net(this);
+	shared_ptr<MILLayer<Dtype> > mil=boost::dynamic_pointer_cast<MILLayer<Dtype> >(layers_[index]);
+	mil->Set_Net(this);
     }
 
     layer_names_.push_back(layer_param.name());

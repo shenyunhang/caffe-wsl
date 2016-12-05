@@ -13,33 +13,39 @@ namespace caffe {
 
 template <typename Dtype>
 __global__ void maximum_kernel(const int N, const Dtype* const X,
-                               Dtype* const Y, const int s, const int e) {
+                               const Dtype* const Y, Dtype* const Z) {
   CUDA_KERNEL_LOOP(index, N) {
-    Y[index] = X[index];
-    for (int i = index + s; i < e; i += s) {
-      if (Y[index] < X[i]) {
-        Y[i] = X[i];
-      }
-    }
+    if (X[index] > Y[index])
+      Z[index] = X[index];
+    else
+      Z[index] = Y[index];
   }
 }
 
 template <typename Dtype>
-void caffe_gpu_maximum(const int N, const Dtype* const X, Dtype* const Y,
-                       const int s, const int e) {
+void caffe_gpu_maximum(const int N, const Dtype* const X, const Dtype* const Y,
+                       Dtype* const Z) {
   // NOLINT_NEXT_LINE(whitespace/operators)
   maximum_kernel<Dtype> << <CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>>
-      (N, X, Y, s, e);
+      (N, X, Y, Z);
 }
 
 template void caffe_gpu_maximum<int>(const int N, const int* const X,
-                                     int* const Y, const int s, const int e);
+                                     const int* const Y, int* const Z);
 template void caffe_gpu_maximum<float>(const int N, const float* const X,
-                                       float* const Y, const int s,
-                                       const int e);
+                                       const float* const Y, float* const Z);
 template void caffe_gpu_maximum<double>(const int N, const double* const X,
-                                        double* const Y, const int s,
-                                        const int e);
+                                        const double* const Y, double* const Z);
+
+template <>
+void caffe_gpu_amax<float>(const int n, const float* x, int* y) {
+  CUBLAS_CHECK(cublasIsamax(Caffe::cublas_handle(), n, x, 1, y));
+}
+
+template <>
+void caffe_gpu_amax<double>(const int n, const double* x, int* y) {
+  CUBLAS_CHECK(cublasIdamax(Caffe::cublas_handle(), n, x, 1, y));
+}
 
 template <typename Dtype>
 __global__ void or_kernel(const int N, const Dtype* const x,
@@ -117,5 +123,51 @@ template void caffe_gpu_without<float>(const int N, float* const x,
 template void caffe_gpu_without<double>(const int N, double* const x,
                                         const double without,
                                         const double replace);
+
+template <typename Dtype>
+__global__ void threshold_min_kernel(const int N, const Dtype* const x,
+                                     Dtype* const y, const Dtype threshold) {
+  CUDA_KERNEL_LOOP(index, N) {
+    if (x[index] < threshold)
+      y[index] = threshold;
+    else
+      y[index] = x[index];
+  }
+}
+
+template <typename Dtype>
+__global__ void threshold_max_kernel(const int N, const Dtype* const x,
+                                     Dtype* const y, const Dtype threshold) {
+  CUDA_KERNEL_LOOP(index, N) {
+    if (x[index] > threshold)
+      y[index] = threshold;
+    else
+      y[index] = x[index];
+  }
+}
+
+template <typename Dtype>
+void caffe_gpu_threshold(const int N, const Dtype* const x, Dtype* const y,
+                         const Dtype threshold, const bool for_max) {
+  if (for_max) {
+    // NOLINT_NEXT_LINE(whitespace/operators)
+    threshold_max_kernel<Dtype> << <CAFFE_GET_BLOCKS(N),
+                                    CAFFE_CUDA_NUM_THREADS>>>
+        (N, x, y, threshold);
+  } else {
+    // NOLINT_NEXT_LINE(whitespace/operators)
+    threshold_min_kernel<Dtype> << <CAFFE_GET_BLOCKS(N),
+                                    CAFFE_CUDA_NUM_THREADS>>>
+        (N, x, y, threshold);
+  }
+}
+
+template void caffe_gpu_threshold<float>(const int N, const float* const x,
+                                         float* const y, const float threshold,
+                                         const bool for_max);
+template void caffe_gpu_threshold<double>(const int N, const double* const x,
+                                          double* const y,
+                                          const double threshold,
+                                          const bool for_max);
 
 }  // namespace caffe

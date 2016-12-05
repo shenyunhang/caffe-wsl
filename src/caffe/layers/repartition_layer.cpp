@@ -31,12 +31,6 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     case CPGParameter_Mode_PRED:
       LOG(INFO) << "mode: PRED";
       break;
-    case CPGParameter_Mode_INSTANCE_LABEL:
-      LOG(INFO) << "mode: INSTANCE_LABEL";
-      break;
-    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
-      LOG(INFO) << "mode: INSTANCE_SOFTMAX_LABEL";
-      break;
     case CPGParameter_Mode_CPG_POOLING:
       LOG(INFO) << "mode: CPG_POOLING";
       CHECK_EQ(is_order_, false)
@@ -49,16 +43,18 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       LOG(FATAL) << "Unknown mode.";
   }
 
-  total_im_ = 0;
-  total_roi_ = 0;
-  total_roi_l_ = 0;
-  total_label_ = 0;
+  bottom_index_["opg"] = 0;
+  bottom_index_["label"] = 1;
+  bottom_index_["predict"] = 2;
+  bottom_index_["rois"] = 3;
+  bottom_index_["rois_score"] = 4;
+  bottom_index_["filter"] = 5;
+  bottom_index_["io"] = 6;
 
-  accum_im_ = 0;
-  accum_roi_ = 0;
-  accum_roi_l_ = 0;
-  accum_label_ = 0;
+  num_class_ = bottom[bottom_index_["label"]]->channels();
 
+  display_ = 1280;
+  pass_im_ = 0;
   max_bb_per_im_ = 4;
   max_bb_per_cls_ = 4;
 
@@ -96,29 +92,27 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     crf_layer_->SetUp(crf_bottom_vec_, crf_top_vec_);
   }
 
-  if (debug_info_) {
-    voc_label_.push_back("aeroplane");
-    voc_label_.push_back("bicycle");
-    voc_label_.push_back("bird");
-    voc_label_.push_back("boat");
-    voc_label_.push_back("bottle");
-    voc_label_.push_back("bus");
-    voc_label_.push_back("car");
-    voc_label_.push_back("cat");
-    voc_label_.push_back("chair");
-    voc_label_.push_back("cow");
-    voc_label_.push_back("diningtable");
-    voc_label_.push_back("dog");
-    voc_label_.push_back("horse");
-    voc_label_.push_back("motorbike");
-    voc_label_.push_back("person");
-    voc_label_.push_back("pottedplant");
-    voc_label_.push_back("sheep");
-    voc_label_.push_back("sofa");
-    voc_label_.push_back("train");
-    voc_label_.push_back("tvmonitor");
-    voc_label_.push_back("background");
-  }
+  voc_label_.push_back("aeroplane");   // 0
+  voc_label_.push_back("bicycle");     // 1
+  voc_label_.push_back("bird");        // 2
+  voc_label_.push_back("boat");        // 3
+  voc_label_.push_back("bottle");      // 4
+  voc_label_.push_back("bus");         // 5
+  voc_label_.push_back("car");         // 6
+  voc_label_.push_back("cat");         // 7
+  voc_label_.push_back("chair");       // 8
+  voc_label_.push_back("cow");         // 9
+  voc_label_.push_back("diningtb");    // 10
+  voc_label_.push_back("dog");         // 11
+  voc_label_.push_back("horse");       // 12
+  voc_label_.push_back("motorbike");   // 13
+  voc_label_.push_back("person");      // 14
+  voc_label_.push_back("potted");      // 15
+  voc_label_.push_back("sheep");       // 16
+  voc_label_.push_back("sofa");        // 17
+  voc_label_.push_back("train");       // 18
+  voc_label_.push_back("tvmonitor");   // 19
+  voc_label_.push_back("background");  // 20
 }
 
 template <typename Dtype>
@@ -130,10 +124,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       break;
     case CPGParameter_Mode_PRED:
       break;
-    case CPGParameter_Mode_INSTANCE_LABEL:
-      break;
-    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
-      break;
     case CPGParameter_Mode_CPG_POOLING:
       break;
     case CPGParameter_Mode_CRF:
@@ -145,16 +135,7 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_DEFAULT:
     case CPGParameter_Mode_PRED:
-    case CPGParameter_Mode_INSTANCE_LABEL:
-    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL:
     case CPGParameter_Mode_CPG_POOLING:
-      bottom_index_["opg"] = 0;
-      bottom_index_["rois"] = 1;
-      bottom_index_["label"] = 2;
-      bottom_index_["predict"] = 3;
-      bottom_index_["filter"] = 4;
-      bottom_index_["io"] = 5;
-
       channels_opg_ = 1;
       height_im_ = bottom[bottom_index_["opg"]]->height();
       width_im_ = bottom[bottom_index_["opg"]]->width();
@@ -164,6 +145,9 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       CHECK_EQ(bottom[bottom_index_["label"]]->num(),
                bottom[bottom_index_["opg"]]->num())
           << "bottom nums are not the same.";
+      LOG_IF(INFO, is_opg_ && debug_info_)
+          << "opg info: channels: " << channels_opg_
+          << " height: " << height_im_ << " width: " << width_im_;
 
       break;
     case CPGParameter_Mode_CRF:
@@ -174,7 +158,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   }
 
   num_roi_ = bottom[bottom_index_["rois"]]->num();
-  num_class_ = bottom[bottom_index_["label"]]->channels();
   num_im_ = bottom[bottom_index_["label"]]->num();
 
   // shape top
@@ -193,14 +176,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
         top[2]->ReshapeLike(*bottom[bottom_index_["label"]]);
         caffe_set(top[2]->count(), Dtype(0), top[2]->mutable_cpu_data());
       }
-    } break;
-    case CPGParameter_Mode_INSTANCE_LABEL:
-    case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
-      CHECK_EQ(top.size(), 1)
-          << "In instance_label mode, only out put one blob.";
-      vector<int> top_shape;
-      top_shape.push_back(num_roi_);
-      top[0]->Reshape(top_shape);
     } break;
     case CPGParameter_Mode_CRF:
       break;
@@ -221,7 +196,7 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   bboxes_->Reshape(bboxes_dims);
 
   // Do some check
-  CHECK_EQ(num_im_, 1) << "current only support one image per forward-backward";
+  CHECK_EQ(num_im_, 1) << "Current only support one image per forward-backward";
   CHECK_EQ(bottom[bottom_index_["predict"]]->shape(0), num_im_)
       << "#im should be the same";
   CHECK_EQ(bottom[bottom_index_["predict"]]->shape(1), num_class_)

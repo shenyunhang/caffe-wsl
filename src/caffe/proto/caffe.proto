@@ -423,6 +423,7 @@ message LayerParameter {
   optional LoopROIPoolingParameter loop_roi_pooling_param = 100011;
   optional PolarConstraintParameter polar_constraint_param = 100012;
   optional CrossEntropyLossParameter cross_entropy_loss_param = 100013;
+  optional CenterLossParameter center_loss_param = 100030;
 
 }
 
@@ -1399,6 +1400,13 @@ message CrossEntropyLossParameter {
   optional uint32 display = 1 [default = 1280];
   optional int32 ignore_label = 2 [default = -1];
   optional int32 ignore_value = 3 [default = -1];
+}
+
+message CenterLossParameter {
+  optional FillerParameter center_filler = 1;
+  optional float lr = 2 [default = 0.5];
+  optional uint32 top_k = 3 [default = 10];
+  optional uint32 num_center = 4 [default = 1];
 }
 
 // DEPRECATED: use LayerParameter.

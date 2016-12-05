@@ -6,52 +6,98 @@
 
 namespace caffe {
 
+void deviceQuery() {
+  int deviceCount = 0;
+  cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
+
+  if (error_id != cudaSuccess) {
+    printf("cudaGetDeviceCount returned %d\n-> %s\n", (int)error_id,
+           cudaGetErrorString(error_id));
+    printf("Result = FAIL\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // This function call returns 0 if there are no CUDA capable devices.
+  if (deviceCount == 0) {
+    printf("There are no available device(s) that support CUDA\n");
+  } else {
+    printf("Detected %d CUDA Capable device(s)\n", deviceCount);
+  }
+
+  int dev, driverVersion = 0, runtimeVersion = 0;
+
+  // for (dev = 0; dev < deviceCount; ++dev) {
+  // cudaSetDevice(dev);
+  cudaGetDevice(&dev);
+  cudaDeviceProp deviceProp;
+  cudaGetDeviceProperties(&deviceProp, dev);
+
+  printf("\nDevice %d: \"%s\"\n", dev, deviceProp.name);
+
+  // Console log
+  cudaDriverGetVersion(&driverVersion);
+  cudaRuntimeGetVersion(&runtimeVersion);
+  printf("  CUDA Driver Version / Runtime Version          %d.%d / %d.%d\n",
+         driverVersion / 1000, (driverVersion % 100) / 10,
+         runtimeVersion / 1000, (runtimeVersion % 100) / 10);
+  printf("  CUDA Capability Major/Minor version number:    %d.%d\n",
+         deviceProp.major, deviceProp.minor);
+  //}
+}
+
 template <typename Dtype>
 void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                  const vector<Blob<Dtype>*>& top) {
+  bottom_index_["label"] = 0;
+  bottom_index_["predict"] = 1;
+  bottom_index_["rois"] = 2;
+  bottom_index_["rois_score"] = 3;
+  bottom_index_["filter"] = 4;
+  bottom_index_["io"] = 5;
 
-  bottom_label_index_ = 0;
-  bottom_predict_index_ = 1;
-  bottom_rois_index_ = 2;
-  bottom_filter_index_ = 3;
-  bottom_io_index_ = 4;
-
-  top_select_index_ = 0;
-  top_poslabel_index_ = 1;
-  top_neglabel_index_ = 2;
+  top_index_["select"] = 1;
+  top_index_["poslabel"] = 2;
+  top_index_["neglabel"] = 3;
 
   LayerParameter mil_param(this->layer_param_);
 
-  // TODO(YH): we can directly create new layers without useing registry
+  // TODO(YH): we can directly create new layers without using registry
   mil_param.set_type("OPG");
   cpg_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
   shared_ptr<OPGLayer<Dtype> > cpg_layer__ =
       boost::dynamic_pointer_cast<OPGLayer<Dtype> >(cpg_layer_);
   cpg_layer__->Set_Net(net_);
   cpg_bottom_vec_.clear();
-  cpg_bottom_vec_.push_back(bottom[bottom_label_index_]);
-  cpg_bottom_vec_.push_back(bottom[bottom_predict_index_]);
+  cpg_bottom_vec_.push_back(bottom[bottom_index_["label"]]);
+  cpg_bottom_vec_.push_back(bottom[bottom_index_["predict"]]);
   cpg_top_vec_.clear();
   cpg_top_vec_.push_back(&cpg_blob_);
   cpg_layer_->SetUp(cpg_bottom_vec_, cpg_top_vec_);
 
-  // TODO(YH): we can directly create new layers without useing registry
+  // TODO(YH): we can directly create new layers without using registry
   mil_param.set_type("Repartition");
   repartition_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
   repartition_bottom_vec_.clear();
   repartition_bottom_vec_.push_back(&cpg_blob_);
-  repartition_bottom_vec_.push_back(bottom[bottom_rois_index_]);
-  repartition_bottom_vec_.push_back(bottom[bottom_label_index_]);
-  repartition_bottom_vec_.push_back(bottom[bottom_predict_index_]);
-  if (bottom.size() > bottom_filter_index_) {
-    repartition_bottom_vec_.push_back(bottom[bottom_filter_index_]);
-    repartition_bottom_vec_.push_back(bottom[bottom_io_index_]);
+  repartition_bottom_vec_.push_back(bottom[bottom_index_["label"]]);
+  repartition_bottom_vec_.push_back(bottom[bottom_index_["predict"]]);
+  repartition_bottom_vec_.push_back(bottom[bottom_index_["rois"]]);
+  repartition_bottom_vec_.push_back(bottom[bottom_index_["rois_score"]]);
+  if (bottom.size() > bottom_index_["filter"]) {
+    repartition_bottom_vec_.push_back(bottom[bottom_index_["filter"]]);
+    repartition_bottom_vec_.push_back(bottom[bottom_index_["io"]]);
   }
   repartition_top_vec_.clear();
   for (size_t i = 0; i < top.size(); ++i) {
     repartition_top_vec_.push_back(top[i]);
   }
   repartition_layer_->SetUp(repartition_bottom_vec_, repartition_top_vec_);
+
+  // get the cuda version
+  LOG(INFO) << "-------------------------------------------------------------";
+  LOG(INFO) << "Show current device and CUDA info";
+  deviceQuery();
+  LOG(INFO) << "-------------------------------------------------------------";
 }
 
 template <typename Dtype>

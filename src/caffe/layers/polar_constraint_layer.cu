@@ -10,33 +10,22 @@ template <typename Dtype>
 void PolarConstraintLayer<Dtype>::Forward_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   // data 	#roi 	#class 	1 	1
-  // filter	#roi 	#class 	1 	1
-  // [0,1) denote the score
-  // 1 denote in postive bag
+  // filter_	#roi 	#class 	1 	1
+  // [-1,1] denote the score
 
-  caffe_copy(count_, bottom[1]->gpu_data(), filter.mutable_gpu_data());
-  /*caffe_gpu_floor(count_, filter.mutable_gpu_data());*/
-  caffe_gpu_ceil(count_, filter.mutable_gpu_data());
-
+  caffe_copy(count_, bottom[1]->gpu_data(), filter_.mutable_gpu_data());
   if (polar_) {
+    // minima is 0
+    caffe_gpu_threshold(count_, filter_.gpu_data(), filter_.mutable_gpu_data(),
+                        Dtype(0), false);
   } else {
-    // 翻天覆地
-    caffe_gpu_scal(count_, Dtype(-1), filter.mutable_gpu_data());
-    caffe_gpu_add_scalar(count_, Dtype(1), filter.mutable_gpu_data());
+    // maxima is 0
+    caffe_gpu_threshold(count_, filter_.gpu_data(), filter_.mutable_gpu_data(),
+                        Dtype(0), true);
+    caffe_gpu_scal(count_, Dtype(-1), filter_.mutable_gpu_data());
   }
-  caffe_gpu_mul(count_, filter.gpu_data(), bottom[0]->gpu_data(),
+  caffe_gpu_mul(count_, filter_.gpu_data(), bottom[0]->gpu_data(),
                 top[0]->mutable_gpu_data());
-
-  if (polar_) {
-  } else {
-    /*caffe_gpu_set(channels_, Dtype(0), top[1]->mutable_gpu_data());*/
-
-    /*caffe_copy(count_, bottom[1]->gpu_data(), top[1]->mutable_gpu_data());*/
-    /*// NOLINT_NEXT_LINE(whitespace/operators)*/
-    /*without_gpu<Dtype><<<CAFFE_GET_BLOCKS(count_),
-     * CAFFE_CUDA_NUM_THREADS>>>(*/
-    /*count_, top[1]->mutable_gpu_data(), Dtype(1), Dtype(0));*/
-  }
 }
 
 template <typename Dtype>
@@ -49,7 +38,7 @@ void PolarConstraintLayer<Dtype>::Backward_gpu(
   }
 
   if (propagate_down[0]) {
-    caffe_gpu_mul(count_, filter.gpu_data(), top[0]->gpu_diff(),
+    caffe_gpu_mul(count_, filter_.gpu_data(), top[0]->gpu_diff(),
                   bottom[0]->mutable_gpu_diff());
   }
 }

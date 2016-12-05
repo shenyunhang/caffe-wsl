@@ -66,9 +66,6 @@ void GeneralPoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void GeneralPoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                                          const vector<Blob<Dtype>*>& top) {
-  // score	#roi	#class	1	1
-  // fliter	#roi	#class	1	1
-
   if (bottom.size() == 2) {
     CHECK_EQ(bottom[0]->num(), bottom[1]->num())
         << "first and second blob must have the same num.";
@@ -78,14 +75,13 @@ void GeneralPoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
         << "second blob height and width must 1.";
   }
 
-  CHECK_EQ(bottom[0]->count(), bottom[0]->num() * bottom[0]->channels())
-      << "first blob height and width must 1.";
-
   const int num_class = bottom[0]->channels();
   const int num_roi = bottom[0]->num();
 
   outer_num_ = bottom[0]->count(0, pooling_axis_);
   inner_num_ = bottom[0]->count(pooling_axis_ + 1);
+  channels_ = bottom[0]->shape(pooling_axis_);
+  dim_ = bottom[0]->count() / outer_num_;
 
   switch (this->layer_param_.general_pooling_param().pool()) {
     case GeneralPoolingParameter_PoolMethod_MUL:
@@ -119,6 +115,7 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
   int* mask = mask_idx_.mutable_cpu_data();
   caffe_set(top_count, -1, mask);
+
   // Different pooling methods. We explicitly do the switch outside the for
   // loop to save time, although this results in more code.
   switch (this->layer_param_.general_pooling_param().pool()) {
@@ -187,14 +184,11 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       // Initialize
       caffe_set(top_count, Dtype(0), top_data);
 
-      int channels = bottom[0]->shape(pooling_axis_);
-      int dim = bottom[0]->count() / outer_num_;
-
       for (int i = 0; i < outer_num_; ++i) {
         for (int k = 0; k < inner_num_; ++k) {
           int pool_index = i * inner_num_ + k;
-          for (int j = 0; j < channels; ++j) {
-            int index = i * dim + j * inner_num_ + k;
+          for (int j = 0; j < channels_; ++j) {
+            int index = i * dim_ + j * inner_num_ + k;
             top_data[pool_index] += bottom_data[index];
           }
         }
@@ -207,16 +201,13 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       // Initialize
       caffe_set(top_count, Dtype(-FLT_MAX), top_data);
 
-      int channels = bottom[0]->shape(pooling_axis_);
-      int dim = bottom[0]->count() / outer_num_;
-
       for (int i = 0; i < outer_num_; ++i) {
         for (int k = 0; k < inner_num_; ++k) {
           int pool_index = i * inner_num_ + k;
           Dtype max_value = -FLT_MAX;
           int max_value_index = -1;
-          for (int j = 0; j < channels; ++j) {
-            int index = i * dim + j * inner_num_ + k;
+          for (int j = 0; j < channels_; ++j) {
+            int index = i * dim_ + j * inner_num_ + k;
             Dtype in = bottom_data[index];
             if (in > max_value) {
               max_value = in;
@@ -228,28 +219,6 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           mask[pool_index] = max_value_index;
         }
       }
-
-      // The main loop
-      // for (int n = 0; n < num_im; ++n) {
-      // for (int c = 0; c < num_class; ++c) {
-      // const int pool_index = n * num_class + c;
-
-      // Dtype max_value = -FLT_MAX;
-      // int max_value_index = -1;
-
-      // for (int r = 0; r < num_roi; ++r) {
-      // const int index = r * num_class + c;
-      // const Dtype in = bottom_data[index];
-      // if (in > max_value) {
-      // max_value = in;
-      // max_value_index = index;
-      //}
-      //}
-      // CHECK_NE(max_value, Dtype(-FLT_MAX)) << "can not find max value";
-      // top_data[pool_index] = max_value;
-      // mask[pool_index] = max_value_index;
-      //}
-      //}
 
     } break;
     case GeneralPoolingParameter_PoolMethod_FSUM:
@@ -342,9 +311,38 @@ void GeneralPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         }
       }
       break;
-    case GeneralPoolingParameter_PoolMethod_TAVEMAX:
-      NOT_IMPLEMENTED;
-      break;
+    case GeneralPoolingParameter_PoolMethod_TAVEMAX: {
+      // Initialize
+      caffe_set(top_count, Dtype(0), top_data);
+
+      for (int i = 0; i < outer_num_; ++i) {
+        for (int k = 0; k < outer_num_; ++k) {
+          int pool_index = i * inner_num_ + k;
+          int pool_size = 0;
+          Dtype max_value = -FLT_MAX;
+          int max_value_index = -1;
+          for (int j = 0; j < channels_; ++j) {
+            const int index = i * dim_ + j * inner_num_ + k;
+            const Dtype in = bottom_data[index];
+            if (in > max_value) {
+              max_value = in;
+              max_value_index = index;
+            }
+            if (in < threshold_) continue;
+            top_data[pool_index] += in;
+            pool_size++;
+          }
+          if (pool_size == 0) {
+            top_data[pool_index] = max_value;
+            mask[pool_index] = max_value_index;
+            mask[pool_index] *= -1;
+          } else {
+            top_data[pool_index] /= pool_size;
+            mask[pool_index] = pool_size;
+          }
+        }
+      }
+    } break;
     case GeneralPoolingParameter_PoolMethod_MUL:
       caffe_mul(bottom[0]->count(), bottom_data, fliter, top_data);
       break;
@@ -374,6 +372,7 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
 
   const int* mask = mask_idx_.cpu_data();
   caffe_set(bottom[0]->count(), Dtype(0), bottom_diff);
+
   // Different pooling methods. We explicitly do the switch outside the for
   // loop to save time, although this results in more codes.
   switch (this->layer_param_.general_pooling_param().pool()) {
@@ -410,14 +409,11 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
       }
       break;
     case GeneralPoolingParameter_PoolMethod_SUM: {
-      int channels = bottom[0]->shape(pooling_axis_);
-      int dim = bottom[0]->count() / outer_num_;
-
       for (int i = 0; i < outer_num_; ++i) {
         for (int k = 0; k < inner_num_; ++k) {
           int pool_index = i * inner_num_ + k;
-          for (int j = 0; j < channels; ++j) {
-            int index = i * dim + j * inner_num_ + k;
+          for (int j = 0; j < channels_; ++j) {
+            int index = i * dim_ + j * inner_num_ + k;
             bottom_diff[index] = top_diff[pool_index];
           }
         }
@@ -431,16 +427,6 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
           bottom_diff[bottom_index] = top_diff[pool_index];
         }
       }
-
-      // The main loop
-      // for (int n = 0; n < num_im; ++n) {
-      // for (int c = 0; c < num_class; ++c) {
-      // const int index = n * num_class + c;
-      // const int bottom_index = mask[index];
-      // bottom_diff[bottom_index] = top_diff[index];
-      //}
-      //}
-
     } break;
     case GeneralPoolingParameter_PoolMethod_FSUM:
       // The main loop
@@ -496,9 +482,25 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
         }
       }
       break;
-    case GeneralPoolingParameter_PoolMethod_TAVEMAX:
-      NOT_IMPLEMENTED;
-      break;
+    case GeneralPoolingParameter_PoolMethod_TAVEMAX: {
+      for (int i = 0; i < outer_num_; ++i) {
+        for (int k = 0; k < inner_num_; ++k) {
+          const int pool_index = i * inner_num_ + k;
+          const int pool_size = mask[pool_index];
+
+          if (pool_index > 0) {
+            for (int j = 0; j < channels_; ++j) {
+              const int index = i * dim_ + j * inner_num_ + k;
+              if (bottom_data[index] < threshold_) continue;
+              bottom_diff[index] = top_diff[pool_index] / pool_size;
+            }
+          } else {
+            const int bottom_index = -1 * pool_size;
+            bottom_diff[bottom_index] = top_diff[pool_index];
+          }
+        }
+      }
+    } break;
     case GeneralPoolingParameter_PoolMethod_MUL:
       NOT_IMPLEMENTED;
       break;
@@ -508,7 +510,7 @@ void GeneralPoolingLayer<Dtype>::Backward_cpu(
 }
 
 //#ifdef CPU_ONLY
-// STUB_GPU(GENERALPoolingLayer);
+// STUB_GPU(GeneralPoolingLayer);
 //#endif
 
 INSTANTIATE_CLASS(GeneralPoolingLayer);

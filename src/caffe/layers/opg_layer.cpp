@@ -55,9 +55,9 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   save_id_ = 0;
   is_show_ = true;
 
-    accum_im_ = 0;
-    accum_gt_ = 0;
-    accum_bp_ = 0;
+  accum_im_ = 0;
+  accum_gt_ = 0;
+  accum_bp_ = 0;
 
   history_params_.clear();
   history_blobs_.clear();
@@ -99,19 +99,23 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   {
     LOG(INFO) << "finding net blob";
     // set im blob and predictiob blob
-    const vector<int> start_bottom_ids = net_->bottom_ids(start_layer_index_);
-    CHECK_EQ(start_bottom_ids.size(), 1)
-        << "start_bottom_ids size should be one";
-    image_blob_index_ = start_bottom_ids[0];
-    im_blob_ = net_->blobs()[image_blob_index_];
+    //
+    // TODO(YH): the image blob may be unnecessary
+    // const vector<int> start_bottom_ids =
+    // net_->bottom_ids(start_layer_index_);
+    // CHECK_EQ(start_bottom_ids.size(), 1)
+    //<< "start_bottom_ids size should be one";
+    // image_blob_index_ = start_bottom_ids[0];
+    // im_blob_ = net_->blobs()[image_blob_index_];
+    im_blob_ = net_->blobs()[opg_blob_index_[0]];
 
     const vector<int> end_top_ids = net_->top_ids(end_layer_index_);
     CHECK_EQ(end_top_ids.size(), 1) << "end_top_ids size should be one";
     predict_blob_index_ = end_top_ids[0];
     predict_blob_ = net_->blobs()[predict_blob_index_];
 
-    CHECK_LT(start_bottom_ids[0], end_top_ids[0])
-        << "start_bottom_ids should be small than end_top_ids";
+    // CHECK_LT(start_bottom_ids[0], end_top_ids[0])
+    //<< "start_bottom_ids should be small than end_top_ids";
 
     for (size_t i = 0; i < opg_blob_index_.size(); ++i) {
       // const vector<int> opg_top_ids = net_->top_ids(opg_layer_index_[i]);
@@ -124,27 +128,26 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   Get_split_top_blob();
 
   if (debug_info_) {
-    voc_label_.push_back("aeroplane");
-    voc_label_.push_back("bicycle");
-    voc_label_.push_back("bird");
-    voc_label_.push_back("boat");
-    voc_label_.push_back("bottle");
-    voc_label_.push_back("bus");
-    voc_label_.push_back("car");
-    voc_label_.push_back("cat");
-    voc_label_.push_back("chair");
-    voc_label_.push_back("cow");
-    voc_label_.push_back("diningtable");
-    voc_label_.push_back("dog");
-    voc_label_.push_back("horse");
-    voc_label_.push_back("motorbike");
-    voc_label_.push_back("person");
-    voc_label_.push_back("pottedplant");
-    voc_label_.push_back("sheep");
-    voc_label_.push_back("sofa");
-    voc_label_.push_back("train");
-    voc_label_.push_back("tvmonitor");
-    voc_label_.push_back("background");
+    voc_label_.push_back("aeroplane");  // 0
+    voc_label_.push_back("bicycle");    // 1
+    voc_label_.push_back("bird");       // 2
+    voc_label_.push_back("boat");       // 3
+    voc_label_.push_back("bottle");     // 4
+    voc_label_.push_back("bus");        // 5
+    voc_label_.push_back("car");        // 6
+    voc_label_.push_back("cat");        // 7
+    voc_label_.push_back("chair");      // 8
+    voc_label_.push_back("cow");        // 9
+    voc_label_.push_back("diningtb");   // 10
+    voc_label_.push_back("dog");        // 11
+    voc_label_.push_back("horse");      // 12
+    voc_label_.push_back("motorbike");  // 13
+    voc_label_.push_back("person");     // 14
+    voc_label_.push_back("potted");     // 15
+    voc_label_.push_back("sheep");      // 16
+    voc_label_.push_back("sofa");       // 17
+    voc_label_.push_back("train");      // 18
+    voc_label_.push_back("tvmonitor");  // 19
   }
 
   LOG(INFO) << "==============================================";
@@ -180,13 +183,19 @@ void OPGLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   channels_opg_ = 1;
   opg_size_ = height_im_ * width_im_;
 
-  // tmp shape top
-  vector<int> top_shape;
-  top_shape.push_back(num_im_);
-  top_shape.push_back(1);
-  top_shape.push_back(height_im_);
-  top_shape.push_back(width_im_);
-  top[0]->Reshape(top_shape);
+  LOG_IF(INFO, is_opg_ && debug_info_) << "opg info: channels: " << channels_im_
+                                       << " height: " << height_im_
+                                       << " width: " << width_im_;
+
+  // reshape top
+  vector<int> top_dims;
+  top_dims.push_back(num_im_);
+  top_dims.push_back(num_class_);
+  top_dims.push_back(height_im_);
+  top_dims.push_back(width_im_);
+  top[0]->Reshape(top_dims);
+  caffe_gpu_set(top[0]->count(), Dtype(0), top[0]->mutable_gpu_data());
+  caffe_gpu_set(top[0]->count(), Dtype(0), top[0]->mutable_gpu_diff());
 }
 
 template <typename Dtype>
