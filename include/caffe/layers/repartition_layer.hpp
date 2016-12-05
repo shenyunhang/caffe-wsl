@@ -79,7 +79,7 @@ class RepartitionLayer : public Layer<Dtype> {
 
   map<string,int> bottom_index_;
   Blob<Dtype>* raw_data_;
-  Blob<Dtype> fliter_;
+  Blob<Dtype> filter_;
 
   int total_im_;
   int total_roi_;

@@ -152,7 +152,7 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       bottom_index_["rois"] = 1;
       bottom_index_["label"] = 2;
       bottom_index_["predict"] = 3;
-      bottom_index_["fliter"] = 4;
+      bottom_index_["filter"] = 4;
       bottom_index_["io"] = 5;
 
       channels_opg_ = 1;
@@ -208,11 +208,11 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       LOG(FATAL) << "Unknown mode.";
   }
 
-  // shape fliter
-  vector<int> fliter_dims;
-  fliter_dims.push_back(num_roi_);
-  fliter_dims.push_back(num_class_);
-  fliter_.Reshape(fliter_dims);
+  // shape filter
+  vector<int> filter_dims;
+  filter_dims.push_back(num_roi_);
+  filter_dims.push_back(num_class_);
+  filter_.Reshape(filter_dims);
 
   // shape bboxes_
   vector<int> bboxes_dims;
@@ -233,9 +233,9 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   if (bottom_index_.find("io") != bottom_index_.end() &&
       bottom.size() > bottom_index_["io"]) {
-    CHECK_EQ(bottom[bottom_index_["fliter"]]->shape(0), num_roi_)
+    CHECK_EQ(bottom[bottom_index_["filter"]]->shape(0), num_roi_)
         << "#roi should be the same";
-    CHECK_EQ(bottom[bottom_index_["fliter"]]->shape(1), num_class_)
+    CHECK_EQ(bottom[bottom_index_["filter"]]->shape(1), num_class_)
         << "#class should be the same";
     CHECK_EQ(bottom[bottom_index_["io"]]->count(), 1) << "only need one IO ID";
   }

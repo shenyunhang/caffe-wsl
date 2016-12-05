@@ -36,6 +36,16 @@ template <typename Dtype>
 void caffe_gpu_or(const int N, const Dtype* const x, const Dtype* const y,
                   Dtype* const z);
 
+template <typename Dtype>
+void caffe_gpu_ceil(const int N, Dtype* const x);
+
+template <typename Dtype>
+void caffe_gpu_floor(const int N, Dtype* const x);
+
+template <typename Dtype>
+void caffe_gpu_without(const int N, Dtype* const x, const Dtype without,
+                       const Dtype replace);
+
 #endif  // !CPU_ONLY
 
 }  // namespace caffe

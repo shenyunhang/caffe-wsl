@@ -41,7 +41,7 @@ class PolarConstraintLayer : public Layer<Dtype> {
   int count_;
   int channels_;
   bool polar_;
-  Blob<Dtype> fliter;
+  Blob<Dtype> filter;
 };
 
 }  // namespace caffe

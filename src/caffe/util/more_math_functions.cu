@@ -67,4 +67,55 @@ template void caffe_gpu_or<float>(const int N, const float* const x,
 template void caffe_gpu_or<double>(const int N, const double* const x,
                                    const double* const y, double* z);
 
+template <typename Dtype>
+__global__ void ceil_kernel(const int N, Dtype* const x) {
+  CUDA_KERNEL_LOOP(index, N) { x[index] = ceil(x[index]); }
+}
+
+template <typename Dtype>
+void caffe_gpu_ceil(const int N, Dtype* const x) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  ceil_kernel<Dtype> << <CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>> (N, x);
+}
+
+template void caffe_gpu_ceil<float>(const int N, float* const x);
+template void caffe_gpu_ceil<double>(const int N, double* const x);
+
+template <typename Dtype>
+__global__ void floor_kernel(const int n, Dtype* const x) {
+  CUDA_KERNEL_LOOP(index, n) { x[index] = floor(x[index]); }
+}
+
+template <typename Dtype>
+void caffe_gpu_floor(const int N, Dtype* const x) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  floor_kernel<Dtype> << <CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>> (N, x);
+}
+
+template void caffe_gpu_floor<float>(const int n, float* const x);
+template void caffe_gpu_floor<double>(const int n, double* const x);
+
+template <typename Dtype>
+__global__ void without_kernel(const int N, Dtype* const x, const Dtype without,
+                               const Dtype replace) {
+  CUDA_KERNEL_LOOP(index, N) {
+    if (x[index] == without) x[index] = replace;
+  }
+}
+
+template <typename Dtype>
+void caffe_gpu_without(const int N, Dtype* const x, const Dtype without,
+                       const Dtype replace) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  without_kernel<Dtype> << <CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>>
+      (N, x, without, replace);
+}
+
+template void caffe_gpu_without<float>(const int N, float* const x,
+                                       const float without,
+                                       const float replace);
+template void caffe_gpu_without<double>(const int N, double* const x,
+                                        const double without,
+                                        const double replace);
+
 }  // namespace caffe

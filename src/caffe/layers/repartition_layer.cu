@@ -12,14 +12,14 @@
 namespace caffe {
 
 template <typename Dtype>
-void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
+void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
                Blob<Dtype> *label_blob, const int save_id, const int num_im,
                const vector<string> voc_label, const int ignore_label,
                const float predict_threshold) {
   const int num_roi = rois_blob->num();
-  const int num_class = fliter_blob->channels();
+  const int num_class = filter_blob->channels();
   const Dtype *rois = rois_blob->cpu_data();
-  const Dtype *fliter = fliter_blob->cpu_data();
+  const Dtype *filter = filter_blob->cpu_data();
   const Dtype *label = label_blob->cpu_data();
 
   const int line_width = 1;
@@ -64,20 +64,19 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *fliter_blob,
                                rng.uniform(0, 255)),
                     line_width);
 
-      if (fliter[r * num_class + c] >= 0.5) {
+      if (filter[r * num_class + c] == 0.0) {
+        cv::rectangle(im_mat_a, cv::Point(rois[5 * r + 1], rois[5 * r + 2]),
+                      cv::Point(rois[5 * r + 3], rois[5 * r + 4]),
+                      cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
+                                 rng.uniform(0, 255)),
+                      line_width);
+      } else {
         cv::rectangle(im_mat_l, cv::Point(rois[5 * r + 1], rois[5 * r + 2]),
                       cv::Point(rois[5 * r + 3], rois[5 * r + 4]),
                       cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
                                  rng.uniform(0, 255)),
                       line_width);
         num_draw++;
-
-      } else {
-        cv::rectangle(im_mat_a, cv::Point(rois[5 * r + 1], rois[5 * r + 2]),
-                      cv::Point(rois[5 * r + 3], rois[5 * r + 4]),
-                      cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
-                                 rng.uniform(0, 255)),
-                      line_width);
       }
 
       if (r % each_page_num == each_page_num - 1) {
@@ -423,7 +422,7 @@ __global__ void InitFilter_Test(const int count, const Dtype *const label_data,
                                 const int num_class, Dtype *const top_data) {
   CUDA_KERNEL_LOOP(index, count) {
     const int c = index % num_class;
-    if (label_data[c] > 0.01) {
+    if (label_data[c] > 0.00001) {
       top_data[index] = 1;
     } else {
       top_data[index] = 0;
@@ -440,7 +439,7 @@ void RepartitionLayer<Dtype>::InitFilter(const Dtype *const label_gpu_data,
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_CPG_POOLING:
       if (this->phase_ == TRAIN) {
-        caffe_gpu_set(num_roi_ * num_class_, Dtype(1), top_gpu_data);
+        caffe_gpu_set(num_roi_ * num_class_, Dtype(0), top_gpu_data);
       } else {
         // NOLINT_NEXT_LINE(whitespace/operators)
         InitFilter_Test<Dtype> << <CAFFE_GET_BLOCKS(num_roi_ * num_class_),
@@ -572,7 +571,7 @@ __global__ void LabelBBoxes_softmax(
     Dtype s = (hend - hstart) * (wend - wstart);
     Dtype density = 1.0 * mass / s / channels;
     if (density > min_density && mass > min_mass) {
-      top_data[rois_index * num_class + cls_id] = Dtype(-1);
+      top_data[rois_index * num_class + cls_id] = Dtype(cls_id);
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(num_class - 1);
     }
@@ -610,7 +609,7 @@ __global__ void LabelBBoxes(const int num_roi, const Dtype *const opg_data,
     Dtype s = (hend - hstart) * (wend - wstart);
     Dtype density = 1.0 * mass / s / channels;
     if (density > min_density && mass > min_mass) {
-      top_data[rois_index * num_class + cls_id] = Dtype(-1);
+      top_data[rois_index * num_class + cls_id] = Dtype(1);
     } else {
       top_data[rois_index * num_class + cls_id] = Dtype(0);
     }
@@ -784,10 +783,10 @@ template <typename Dtype>
 void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                           const vector<Blob<Dtype> *> &top) {
   InitFilter(bottom[bottom_index_["label"]]->gpu_data(),
-             fliter_.mutable_gpu_data());
+             filter_.mutable_gpu_data());
 
   if (!is_opg_) {
-    top[0]->CopyFrom(fliter_, false, false);
+    caffe_gpu_set(top[0]->count(), Dtype(1), top[0]->mutable_gpu_data());
     return;
   }
 
@@ -861,18 +860,6 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
           }
         }
       } break;
-      // case CPGParameter_Mode_CPG_POOLING: {
-      //  Blob<Dtype> *opg_pool = bottom[bottom_index_["opg_pool"]];
-      //  // NOLINT_NEXT_LINE(whitespace/operators)
-      //  opg_sum<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
-      // CAFFE_CUDA_NUM_THREADS>>>
-      //      (num_roi_, opg_pool->gpu_data(), opg_pool->channels(),
-      //       opg_pool->height(), opg_pool->width(), opg_id, num_class_,
-      // cls_id,
-      //       0, fliter_.mutable_gpu_data());
-      //  ++opg_id;
-      //}
-      // break;
       case CPGParameter_Mode_CRF:
         break;
       default:
@@ -904,7 +891,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
             (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold,
              im_density * density_threshold_, im_mass * mass_threshold_,
-             fliter_.mutable_gpu_data());
+             filter_.mutable_gpu_data());
       } break;
       case CPGParameter_Mode_PRED: {
         const Dtype maxval =
@@ -926,7 +913,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                CAFFE_CUDA_NUM_THREADS>>>
             (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold, min_density, im_mass,
-             fliter_.mutable_gpu_data());
+             filter_.mutable_gpu_data());
       } break;
       case CPGParameter_Mode_INSTANCE_LABEL: {
         const Dtype maxval =
@@ -948,7 +935,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
             (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold,
              im_density * density_threshold_, im_mass * mass_threshold_,
-             fliter_.mutable_gpu_data());
+             filter_.mutable_gpu_data());
       } break;
       case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
         const Dtype maxval =
@@ -970,7 +957,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
             (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold,
              im_density * density_threshold_, im_mass * mass_threshold_,
-             fliter_.mutable_gpu_data());
+             filter_.mutable_gpu_data());
       } break;
       case CPGParameter_Mode_CPG_POOLING: {
         const Dtype maxval =
@@ -982,43 +969,50 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                              CAFFE_CUDA_NUM_THREADS>>>
             (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
              bottom_rois, num_class_, cls_id, threshold, 0, 0,
-             fliter_.mutable_gpu_data());
+             filter_.mutable_gpu_data());
 
         // normalization to (0,1)
         if (true) {
-          Dtype *fliter_data = fliter_.mutable_cpu_data();
+          Dtype *filter_data = filter_.mutable_cpu_data();
           Dtype max_value = 0;
           for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
-            if (fliter_data[roi_id * num_class_ + cls_id] > max_value) {
-              max_value = fliter_data[roi_id * num_class_ + cls_id];
+            if (filter_data[roi_id * num_class_ + cls_id] > max_value) {
+              max_value = filter_data[roi_id * num_class_ + cls_id];
             }
           }
 
           for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
-            fliter_data[roi_id * num_class_ + cls_id] /= max_value;
+            filter_data[roi_id * num_class_ + cls_id] /= max_value;
+          }
+
+          if (debug_info_) {
+            for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+              std::cout << filter_data[roi_id * num_class_ + cls_id] << " ";
+            }
+            std::cout << std::endl;
           }
         }
 
         // left top k
         if (false) {
-          Dtype *fliter_data = fliter_.mutable_cpu_data();
+          Dtype *filter_data = filter_.mutable_cpu_data();
           for (int k = 0; k < 100; ++k) {
             Dtype max_value = 0;
             int max_id = -1;
             for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
-              if (fliter_data[roi_id * num_class_ + cls_id] > max_value) {
-                max_value = fliter_data[roi_id * num_class_ + cls_id];
+              if (filter_data[roi_id * num_class_ + cls_id] > max_value) {
+                max_value = filter_data[roi_id * num_class_ + cls_id];
                 max_id = roi_id * num_class_ + cls_id;
               }
             }
-            fliter_data[max_id] = -1;
+            filter_data[max_id] = -1;
           }
 
           for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
-            if (fliter_data[roi_id * num_class_ + cls_id] == -1) {
-              fliter_data[roi_id * num_class_ + cls_id] = 1;
+            if (filter_data[roi_id * num_class_ + cls_id] == -1) {
+              filter_data[roi_id * num_class_ + cls_id] = 1;
             } else {
-              fliter_data[roi_id * num_class_ + cls_id] = 0;
+              filter_data[roi_id * num_class_ + cls_id] = 0;
             }
           }
         }
@@ -1035,16 +1029,16 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   // Show patch
   //----------------------------------------------------------------------
   if (debug_info_) {
-    Show_rois(bottom[bottom_index_["rois"]], &fliter_,
+    Show_rois(bottom[bottom_index_["rois"]], &filter_,
               bottom[bottom_index_["label"]], total_im_, num_im_, voc_label_,
               ignore_label_, predict_threshold_);
   }
 
-  // get the final output from fliter
+  // get the final output from filter
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_DEFAULT:
     case CPGParameter_Mode_PRED:
-      top[0]->CopyFrom(fliter_, false, false);
+      top[0]->CopyFrom(filter_, false, false);
       if (bottom.size() > bottom_index_["io"]) {
         if (re_num > 0) {
           int save_id = int(bottom[bottom_index_["io"]]->cpu_data()[0]);
@@ -1059,14 +1053,14 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         }
 
         caffe_gpu_or(num_roi_ * num_class_,
-                     bottom[bottom_index_["fliter"]]->gpu_data(),
+                     bottom[bottom_index_["filter"]]->gpu_data(),
                      top[0]->gpu_data(), top[0]->mutable_gpu_data());
       }
       break;
     case CPGParameter_Mode_INSTANCE_LABEL: {
       caffe_set(num_roi_, Dtype(-1), top[0]->mutable_cpu_data());
       Dtype *instance_label_data = top[0]->mutable_cpu_data();
-      const Dtype *fliter_data = fliter_.cpu_data();
+      const Dtype *filter_data = filter_.cpu_data();
       for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
         int index = cls_id;
         if (Need_Repartition(cls_id, bottom_label[index],
@@ -1076,7 +1070,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         }
         for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
           Dtype f1 = instance_label_data[roi_id];
-          Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
+          Dtype f2 = filter_data[num_class_ * roi_id + cls_id];
 
           if (f1 == 0) {
             if (f2 == 0) {
@@ -1112,7 +1106,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     case CPGParameter_Mode_INSTANCE_SOFTMAX_LABEL: {
       caffe_set(num_roi_, Dtype(num_class_), top[0]->mutable_cpu_data());
       Dtype *instance_label_data = top[0]->mutable_cpu_data();
-      const Dtype *fliter_data = fliter_.cpu_data();
+      const Dtype *filter_data = filter_.cpu_data();
       for (int cls_id = 0; cls_id < num_class_; ++cls_id) {
         int index = cls_id;
         if (Need_Repartition(cls_id, bottom_label[index],
@@ -1122,7 +1116,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         }
         for (int roi_id = 0; roi_id < num_roi_; ++roi_id) {
           Dtype f1 = instance_label_data[roi_id];
-          Dtype f2 = fliter_data[num_class_ * roi_id + cls_id];
+          Dtype f2 = filter_data[num_class_ * roi_id + cls_id];
 
           if (f1 == num_class_) {
             if (f2 == num_class_) {
@@ -1151,21 +1145,21 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       }
     } break;
     case CPGParameter_Mode_CPG_POOLING:
-      top[0]->CopyFrom(fliter_, false, false);
+      top[0]->CopyFrom(filter_, false, false);
       break;
     case CPGParameter_Mode_CRF:
       break;
     default:
       LOG(FATAL) << "Unknown mode.";
   }
-  //-----------------------------------------------------------------------
 
+  //-----------------------------------------------------------------------
   int roi_left = 0;
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_DEFAULT:
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_CPG_POOLING:
-      roi_left = fliter_.asum_data() - (num_class_ - gt_num) * num_roi_;
+      roi_left = filter_.asum_data() - (num_class_ - gt_num) * num_roi_;
       break;
     case CPGParameter_Mode_INSTANCE_LABEL: {
       const Dtype *instance_label_data = top[0]->cpu_data();
