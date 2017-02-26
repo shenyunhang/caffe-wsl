@@ -25,9 +25,6 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   density_threshold_ = this_layer_param.density_threshold();
 
   switch (this->layer_param_.cpg_param().mode()) {
-    case CPGParameter_Mode_DEFAULT:
-      LOG(INFO) << "mode: DEFAULT";
-      break;
     case CPGParameter_Mode_PRED:
       LOG(INFO) << "mode: PRED";
       break;
@@ -120,8 +117,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                                       const vector<Blob<Dtype>*>& top) {
 
   switch (this->layer_param_.cpg_param().mode()) {
-    case CPGParameter_Mode_DEFAULT:
-      break;
     case CPGParameter_Mode_PRED:
       break;
     case CPGParameter_Mode_CPG_POOLING:
@@ -133,13 +128,12 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   }
 
   switch (this->layer_param_.cpg_param().mode()) {
-    case CPGParameter_Mode_DEFAULT:
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_CPG_POOLING:
       channels_opg_ = 1;
       height_im_ = bottom[bottom_index_["opg"]]->height();
       width_im_ = bottom[bottom_index_["opg"]]->width();
-      opg_size_ = height_im_ * width_im_;
+      size_opg_ = height_im_ * width_im_;
       raw_data_->Reshape(1, 1, height_im_, width_im_);
 
       CHECK_EQ(bottom[bottom_index_["label"]]->num(),
@@ -148,7 +142,6 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       LOG_IF(INFO, is_opg_ && debug_info_)
           << "opg info: channels: " << channels_opg_
           << " height: " << height_im_ << " width: " << width_im_;
-
       break;
     case CPGParameter_Mode_CRF:
       LOG(FATAL) << "Not yet.";
@@ -162,13 +155,13 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   // shape top
   switch (this->layer_param_.cpg_param().mode()) {
-    case CPGParameter_Mode_DEFAULT:
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_CPG_POOLING: {
       vector<int> top_dims;
       top_dims.push_back(num_roi_);
       top_dims.push_back(num_class_);
       top[0]->Reshape(top_dims);
+      caffe_gpu_set(top[0]->count(), Dtype(1), top[0]->mutable_gpu_data());
 
       // In test model, the output number is one.
       if (top.size() == 3) {

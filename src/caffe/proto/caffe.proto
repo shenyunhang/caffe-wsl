@@ -1256,19 +1256,16 @@ message SPPParameter {
 // Message that stores parameters used by OPGROISelectLayer
 message CPGParameter {
   enum Mode {
-    DEFAULT = 0;
-    CRF = 1;
-    INSTANCE_LABEL = 2;
-    INSTANCE_SOFTMAX_LABEL = 3;
-    CPG_POOLING = 4;
-    PRED = 5;
+    CPG_POOLING = 0;
+    PRED = 1;
+    CRF = 2;
   }
   optional bool is_cpg = 21 [default = true];
   optional bool is_contrast = 30 [default = false];
   optional bool is_order = 41 [default = false];
   optional bool debug_info = 22 [default = false];
 
-  optional Mode mode = 90 [default = DEFAULT];
+  optional Mode mode = 90 [default = CPG_POOLING];
   optional int32 ignore_label = 70 [default = -1];
 
   required string start_layer_name = 23 [default = ''];
@@ -1404,9 +1401,12 @@ message CrossEntropyLossParameter {
 
 message CenterLossParameter {
   optional FillerParameter center_filler = 1;
-  optional float lr = 2 [default = 0.5];
-  optional uint32 top_k = 3 [default = 10];
-  optional uint32 num_center = 4 [default = 1];
+  optional bool debug_info = 2 [default = false];
+  optional float lr = 3 [default = 0.5];
+  optional uint32 top_k = 4 [default = 10];
+  optional uint32 num_center = 5 [default = 1];
+  optional uint32 display = 6 [default = 1280];
+  optional uint32 update = 7 [default = 128];
 }
 
 // DEPRECATED: use LayerParameter.

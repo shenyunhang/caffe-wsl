@@ -43,32 +43,34 @@ class CenterLossLayer : public LossLayer<Dtype> {
   // 2: label
   // 3: bbox score
 
-  Blob<Dtype> diff_;
   // We repalce the center_ with blob_.
   // So that the center will be saved when the net is saved.
-  // However we don't update the center by the net, but by this layer itself.
-  // So the learning rate of this layer is set to zero.
+  // However, we don't update the center by the solver, but by this layer
+  // itself.
+  // So the learning rate of this layer need set to zero.
   // Blob<Dtype> center_;
-  int num_center_;
 
   bool debug_info_;
+  int num_center_;
   int top_k_;
+  int display_;
+  int update_;
   Dtype lr_;
+
   int dim_;
   int num_class_;
 
+  Blob<Dtype> diff_;
   int num_gt_class_;
   int num_roi_;
-
   vector<set<int> > roi_sets_;
   vector<int> center_selector_;
 
+  vector<vector<int> > num_update_class_;
+
+  // output for visualization
   Dtype accum_loss_;
   int total_iter_;
-  int display_;
-
-  int update_;
-  vector<vector<int> > num_update_class_;
   vector<vector<int> > accum_update_class_;
 };
 

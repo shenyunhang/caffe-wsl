@@ -14,8 +14,6 @@
 
 namespace caffe {
 
-const float kLOG_THRESHOLD = 1e-20;
-
 template <typename Dtype>
 class OPGLayer : public Layer<Dtype> {
  public:
@@ -35,6 +33,8 @@ class OPGLayer : public Layer<Dtype> {
     net_ = net;
   }
 
+  vector<int> get_gt_class() { return gt_class_; }
+
   void OPG_back();
 
   // DEPRECATED. As OPG_back function will not change the diff of param now.
@@ -48,7 +48,7 @@ class OPGLayer : public Layer<Dtype> {
   void Get_split_top_blob();
   void Show_opg(const Dtype* opg_data, const int cur, const string info = "");
   bool Need_Repartition(const int cls_id, const Dtype label, const Dtype score);
-  bool Need_Order(const int cls_id,const Dtype label, const Dtype score);
+  bool Need_Order(const int cls_id, const Dtype label, const Dtype score);
   void After();
 
  protected:
@@ -79,7 +79,6 @@ class OPGLayer : public Layer<Dtype> {
 
   int start_layer_index_;
   int end_layer_index_;
-  int image_blob_index_;
   int predict_blob_index_;
   vector<int> opg_blob_index_;
 
@@ -109,7 +108,7 @@ class OPGLayer : public Layer<Dtype> {
   int width_im_;
   int channels_im_;
   int channels_opg_;
-  int opg_size_;
+  int size_opg_;
 
   vector<int> bp_class_;
   vector<int> gt_class_;

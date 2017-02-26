@@ -97,16 +97,9 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   // find net blob
   {
-    LOG(INFO) << "finding net blob";
     // set im blob and predictiob blob
-    //
-    // TODO(YH): the image blob may be unnecessary
-    // const vector<int> start_bottom_ids =
-    // net_->bottom_ids(start_layer_index_);
-    // CHECK_EQ(start_bottom_ids.size(), 1)
-    //<< "start_bottom_ids size should be one";
-    // image_blob_index_ = start_bottom_ids[0];
-    // im_blob_ = net_->blobs()[image_blob_index_];
+    LOG(INFO) << "finding net blob";
+    // TODO(YH): the image blob means the first opg blob
     im_blob_ = net_->blobs()[opg_blob_index_[0]];
 
     const vector<int> end_top_ids = net_->top_ids(end_layer_index_);
@@ -114,13 +107,7 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     predict_blob_index_ = end_top_ids[0];
     predict_blob_ = net_->blobs()[predict_blob_index_];
 
-    // CHECK_LT(start_bottom_ids[0], end_top_ids[0])
-    //<< "start_bottom_ids should be small than end_top_ids";
-
     for (size_t i = 0; i < opg_blob_index_.size(); ++i) {
-      // const vector<int> opg_top_ids = net_->top_ids(opg_layer_index_[i]);
-      // CHECK_EQ(opg_top_ids.size(), 1) << "opg_top_ids size should be one";
-      // opg_blob_.push_back(net_->blobs()[opg_top_ids[0]]);
       opg_blob_.push_back(net_->blobs()[opg_blob_index_[i]]);
     }
   }
@@ -161,7 +148,6 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   LOG(INFO) << "start_layer_index_: " << start_layer_index_;
   LOG(INFO) << "end_layer_name_: " << end_layer_name_;
   LOG(INFO) << "end_layer_index_: " << end_layer_index_;
-  LOG(INFO) << "image_blob_index_: " << image_blob_index_;
   LOG(INFO) << "predict_blob_index_: " << predict_blob_index_;
   for (size_t i = 0; i < opg_blob_name_.size(); ++i) {
     LOG(INFO) << "opg_blob_name_: " << opg_blob_name_[i];
@@ -181,7 +167,7 @@ void OPGLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   height_im_ = im_blob_->height();
   width_im_ = im_blob_->width();
   channels_opg_ = 1;
-  opg_size_ = height_im_ * width_im_;
+  size_opg_ = height_im_ * width_im_;
 
   LOG_IF(INFO, is_opg_ && debug_info_) << "opg info: channels: " << channels_im_
                                        << " height: " << height_im_

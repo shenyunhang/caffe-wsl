@@ -15,16 +15,18 @@ void CenterLossLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   num_center_ = this->layer_param_.center_loss_param().num_center();
   top_k_ = this->layer_param_.center_loss_param().top_k();
   lr_ = this->layer_param_.center_loss_param().lr();
+  debug_info_ = this->layer_param_.center_loss_param().debug_info();
+  display_ = this->layer_param_.center_loss_param().display();
+  update_ = this->layer_param_.center_loss_param().update();
 
-  debug_info_ = false;
-  // debug_info_ = true;
-  dim_ = bottom[0]->channels();
+  dim_ = bottom[0]->channels() * bottom[0]->height() * bottom[0]->width();
   num_class_ = bottom[1]->channels();
 
   for (int c = 0; c < num_class_; ++c) {
     set<int> r_s;
     roi_sets_.push_back(r_s);
     center_selector_.push_back(-1);
+
     vector<int> n_u_c;
     num_update_class_.push_back(n_u_c);
     vector<int> a_u_c;
@@ -37,9 +39,6 @@ void CenterLossLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   accum_loss_ = 0;
   total_iter_ = 0;
-  display_ = 1280;
-
-  update_ = 128;
 
   vector<int> center_dims;
   center_dims.push_back(num_class_);
@@ -74,12 +73,14 @@ void CenterLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   num_roi_ = bottom[0]->num();
   CHECK_EQ(dim_, bottom[0]->channels()) << "Shape is not right.";
 
-  CHECK_EQ(bottom[1]->num(), 1)
-      << "Current only support one image per forward.";
-  CHECK_EQ(num_class_, bottom[1]->channels()) << "Shape is not right.";
+  CHECK_EQ(bottom[1]->num(), 1) << "Only support one image per forward.";
+  CHECK_EQ(bottom[1]->channels(), num_class_) << "Shape is not right.";
+  CHECK_EQ(bottom[1]->count(), num_class_) << "Shape is not right.";
 
   CHECK_EQ(bottom[2]->num(), num_roi_) << "Shape is not right.";
   CHECK_EQ(bottom[2]->channels(), num_class_) << "Shape is not right";
+  CHECK_EQ(bottom[2]->height(), 1) << "Shape is not right";
+  CHECK_EQ(bottom[2]->width(), 1) << "Shape is not right";
 
   caffe_gpu_set(diff_.count(), Dtype(0), diff_.mutable_gpu_data());
   caffe_gpu_set(diff_.count(), Dtype(0), diff_.mutable_gpu_diff());

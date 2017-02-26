@@ -39,7 +39,6 @@ void OPGLayer<Dtype>::Show_info() {
   LOG(INFO) << "start_layer_index_: " << start_layer_index_;
   LOG(INFO) << "end_layer_name_: " << end_layer_name_;
   LOG(INFO) << "end_layer_index_: " << end_layer_index_;
-  LOG(INFO) << "image_blob_index_: " << image_blob_index_;
   LOG(INFO) << "predict_blob_index_: " << predict_blob_index_;
   for (size_t i = 0; i < opg_blob_name_.size(); ++i) {
     LOG(INFO) << "opg_blob_name_: " << opg_blob_name_[i];
@@ -530,8 +529,6 @@ __global__ void tanh_gpu(const int count, Dtype *const data) {
 template <typename Dtype>
 void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                   const vector<Blob<Dtype> *> &top) {
-  caffe_gpu_set(top[0]->count(), static_cast<Dtype>(0),
-                top[0]->mutable_gpu_data());
   if (!is_opg_) {
     return;
   }
@@ -675,29 +672,27 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
 
     // maximum along channel and save to raw_opg_ diff
     for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
-      const int channels_num_this = opg_blob_[blob_id]->shape(1);
-      const int channel_size_this =
+      const int channels_opg_this = opg_blob_[blob_id]->shape(1);
+      const int size_opg_this =
           opg_blob_[blob_id]->shape(2) * opg_blob_[blob_id]->shape(3);
 
       caffe_gpu_abs(opg_blob_[blob_id]->count(), opg_blob_[blob_id]->gpu_diff(),
                     opg_blob_[blob_id]->mutable_gpu_diff());
 
-      if (channels_num_this == 1) {
-        caffe_copy(channel_size_this, opg_blob_[blob_id]->gpu_diff(),
+      if (channels_opg_this == 1) {
+        caffe_copy(size_opg_this, opg_blob_[blob_id]->gpu_diff(),
                    raw_opg_->mutable_gpu_diff() +
                        raw_opg_->offset(bp_id, blob_id, 0, 0));
       } else {
-        caffe_gpu_maximum(
-            channel_size_this,
-            opg_blob_[blob_id]->gpu_diff() + channel_size_this * 0,
-            opg_blob_[blob_id]->gpu_diff() + channel_size_this * 1,
-            raw_opg_->mutable_gpu_diff() +
-                raw_opg_->offset(bp_id, blob_id, 0, 0));
+        caffe_gpu_maximum(size_opg_this,
+                          opg_blob_[blob_id]->gpu_diff() + size_opg_this * 0,
+                          opg_blob_[blob_id]->gpu_diff() + size_opg_this * 1,
+                          raw_opg_->mutable_gpu_diff() +
+                              raw_opg_->offset(bp_id, blob_id, 0, 0));
 
-        for (int i = 2; i < channels_num_this; ++i) {
+        for (int i = 2; i < channels_opg_this; ++i) {
           caffe_gpu_maximum(
-              channel_size_this,
-              opg_blob_[blob_id]->gpu_diff() + channel_size_this * i,
+              size_opg_this, opg_blob_[blob_id]->gpu_diff() + size_opg_this * i,
               raw_opg_->gpu_diff() + raw_opg_->offset(bp_id, blob_id, 0, 0),
               raw_opg_->mutable_gpu_diff() +
                   raw_opg_->offset(bp_id, blob_id, 0, 0));
@@ -745,7 +740,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     int cls_id = gt_class_[gt_id];
     if (opg_blob_.size() == 1 && opg_blob_[0]->shape(2) == height_im_ &&
         opg_blob_[0]->shape(3) == width_im_) {
-      caffe_copy(opg_size_,
+      caffe_copy(size_opg_,
                  raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, 0, 0, 0),
                  top[0]->mutable_gpu_data() + top[0]->offset(0, cls_id, 0, 0));
     } else {
@@ -754,7 +749,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
         if (opg_blob_[blob_id]->shape(2) == height_im_ &&
             opg_blob_[blob_id]->shape(3) == width_im_) {
-          caffe_copy(opg_size_, raw_opg_->gpu_diff() +
+          caffe_copy(size_opg_, raw_opg_->gpu_diff() +
                                     raw_opg_->offset(gt_id, blob_id, 0, 0),
                      raw_opg_->mutable_gpu_data() +
                          raw_opg_->offset(gt_id, blob_id, 0, 0));
@@ -769,7 +764,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         }
 
         int max_value_index;
-        caffe_gpu_amax(opg_size_, raw_opg_->gpu_data() +
+        caffe_gpu_amax(size_opg_, raw_opg_->gpu_data() +
                                       raw_opg_->offset(gt_id, blob_id, 0, 0),
                        &max_value_index);
         max_value_index--;
@@ -777,12 +772,12 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
             *(raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0) +
               max_value_index);
 
-        caffe_gpu_scal(opg_size_, Dtype(1.0 / maxval),
+        caffe_gpu_scal(size_opg_, Dtype(1.0 / maxval),
                        raw_opg_->mutable_gpu_data() +
                            raw_opg_->offset(gt_id, blob_id, 0, 0));
 
         caffe_gpu_add(
-            opg_size_, top[0]->gpu_data() + top[0]->offset(0, cls_id, 0, 0),
+            size_opg_, top[0]->gpu_data() + top[0]->offset(0, cls_id, 0, 0),
             raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
             top[0]->mutable_gpu_data() + top[0]->offset(0, cls_id, 0, 0));
         if (debug_info_) {

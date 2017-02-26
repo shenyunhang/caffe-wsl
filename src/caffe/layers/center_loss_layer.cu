@@ -32,7 +32,8 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
       }
       roi_sets_[c].insert(max_value_index);
-      LOG_IF(INFO, debug_info_) << "r: " << max_value_index;
+      LOG_IF(INFO, debug_info_) << "max_value_index: " << max_value_index
+                                << " max_value: " << max_value;
     }
   }
 
@@ -41,6 +42,7 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   Dtype* diff_data = diff_.mutable_gpu_data();
   Dtype* diff_diff = diff_.mutable_gpu_diff();
 
+  // TODO(YH): BUG, RoI score is forget to use.
   Dtype dot = 0;
   for (int c = 0; c < num_class_; ++c) {
     center_selector_[c] = -1;
@@ -52,7 +54,6 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       for (k = 0, it = roi_sets_[c].begin(); it != roi_sets_[c].end();
            ++k, ++it) {
         int r = *it;
-
         caffe_gpu_sub(dim_, feature_data + r * dim_,
                       center_data + (c * num_center_ + m) * dim_,
                       diff_diff + (c * top_k_ + k) * dim_);
@@ -128,6 +129,7 @@ void CenterLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       caffe_gpu_axpby(dim_, alpha, diff_data + (c * top_k_ + k) * dim_,
                       Dtype(1), bottom_diff + r * dim_);
 
+      // TODO(YH): whether center update is correct
       // center diff
       caffe_gpu_axpby(
           dim_, Dtype(-1), diff_data + (c * top_k_ + k) * dim_, Dtype(1),

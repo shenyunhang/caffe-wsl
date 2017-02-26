@@ -44,6 +44,7 @@ class RepartitionLayer : public Layer<Dtype> {
   virtual inline int MaxNumTopBlobs() const { return 3; }
   virtual inline int MinNumTopBlobs() const { return 1; }
 
+  void set_gt_class(vector<int> gt_class) { gt_class_ = gt_class; }
   bool aou_small(const Dtype* roi, const Dtype bb_offset);
   void Repartition_crf(const int label);
   void Score_map_crf();
@@ -98,8 +99,10 @@ class RepartitionLayer : public Layer<Dtype> {
   int height_im_;
   int width_im_;
   int channels_opg_;
-  int opg_size_;
+  int size_opg_;
   int num_gt_;
+
+  vector<int> gt_class_;
 
   // crf
   shared_ptr<DenseCRFLayer<Dtype> > crf_layer_;

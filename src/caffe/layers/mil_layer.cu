@@ -1,6 +1,5 @@
 #include <vector>
 
-#include "caffe/filler.hpp"
 #include "caffe/layers/mil_layer.hpp"
 #include "caffe/util/math_functions.hpp"
 
@@ -10,6 +9,7 @@ template <typename Dtype>
 void MILLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                                   const vector<Blob<Dtype>*>& top) {
   cpg_layer_->Forward(cpg_bottom_vec_, cpg_top_vec_);
+  repartition_layer_->set_gt_class(cpg_layer_->get_gt_class());
   repartition_layer_->Forward(repartition_bottom_vec_, repartition_top_vec_);
 }
 
