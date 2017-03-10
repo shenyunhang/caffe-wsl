@@ -57,16 +57,12 @@ Dtype GetDtypePrecision(Dtype value, Dtype precision) {
 }
 
 template <typename Dtype>
-void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
-               Blob<Dtype> *label_blob, const int save_id, const int num_im,
-               const vector<string> voc_label, const int ignore_label,
-               const float predict_threshold, const bool jet = false) {
-  const int num_roi = rois_blob->num();
-  const int num_class = filter_blob->channels();
-  const Dtype *rois = rois_blob->cpu_data();
-  const Dtype *filter = filter_blob->cpu_data();
-  const Dtype *label = label_blob->cpu_data();
-  const int each_page_num = 1;
+void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
+               const int save_id, const int num_im, const int num_class,
+               const int num_roi, const vector<string> voc_label,
+               const string info, const float predict_threshold,
+               const bool jet = false) {
+  const int each_page_num = 10000;
   const int line_width = 6;
 
   cv::RNG rng(12345);
@@ -86,17 +82,33 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
     if (label[c] <= predict_threshold) {
       continue;
     }
-    if (c == ignore_label) {
-      continue;
-    }
-    if (c == 0 || c == 19) {
-    } else {
-      continue;
-    }
+
+    // if (c == 7) {
+    //} else {
+    // continue;
+    //}
 
     save_dir.str(std::string());
     save_dir << "tmp/" << voc_label[c] << "/" << save_id << "/";
     boost::filesystem::create_directories(save_dir.str());
+
+    set<int> show_ix;
+    for (int t = 0; t < 10; ++t) {
+      Dtype max_roi_score = kMIN_SCORE;
+      int max_roi_ix = -1;
+      for (int r = 0; r < num_roi; ++r) {
+        if (show_ix.find(r) == show_ix.end()) {
+        } else {
+          continue;
+        }
+        Dtype rois_score = scores[r * num_class + c];
+        if (rois_score > max_roi_score) {
+          max_roi_score = rois_score;
+          max_roi_ix = r;
+        }
+      }
+      show_ix.insert(max_roi_ix);
+    }
 
     cv::Mat add_mat(im_mat.rows, im_mat.cols, CV_32FC1);
     cv::Mat count_mat(im_mat.rows, im_mat.cols, CV_32FC1, cv::Scalar(0));
@@ -105,7 +117,6 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
     for (int r = 0, page = 0; r < num_roi; ++r) {
       // rois: n x1 y1 x2 y2
       // rec: x y w h
-      //
 
       Dtype wstart = round(rois[5 * r + 1]);
       Dtype hstart = round(rois[5 * r + 2]);
@@ -142,19 +153,32 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
           cv::Rect(wstart_outer, hstart_outer, wend_outer - wstart_outer,
                    hend_outer - hstart_outer);
 
-      Dtype rois_score = filter[r * num_class + c];
+      Dtype rois_score = scores[r * num_class + c];
       //--------------------------------------------------------------------------
       // draw rectangle
-      cv::rectangle(im_mat_o, rec, gray2jet(abs(rois_score)), line_width);
-      cv::rectangle(im_mat_o, rec_inner, gray2jet(abs(rois_score)), line_width);
-      cv::rectangle(im_mat_o, rec_outer, gray2jet(abs(rois_score)), line_width);
+      if (rois_score < 0) {
+        rois_score = 0;
+      }
+      // rois_score=1-rois_score;
+      //
+      if (show_ix.find(r) == show_ix.end()) {
+      } else {
+        cv::rectangle(im_mat_o, rec, gray2jet(abs(rois_score)), line_width);
+      }
+
+      // cv::rectangle(im_mat_o, rec, gray2jet(abs(rois_score)), line_width);
+      // cv::rectangle(im_mat_o, rec_inner, gray2jet(abs(rois_score)),
+      // line_width);
+      // cv::rectangle(im_mat_o, rec_outer, gray2jet(abs(rois_score)),
+      // line_width);
 
       // 如果r+1整除each_page_num或者r是最后一个
       if ((r + 1) % each_page_num == 0 || r == num_roi - 1) {
         save_path.str(std::string());
         save_path.precision(4);
         save_path << save_dir.str() << (rois_score > 0 ? "+" : "-")
-                  << std::fixed << abs(rois_score) << "_" << page << ".png";
+                  << std::fixed << abs(rois_score) << "_" << page << info
+                  << ".png";
         cv::imwrite(save_path.str(), im_mat_o);
         LOG(INFO) << "save_path: " << save_path.str();
 
@@ -191,13 +215,13 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
 
     count_mat.convertTo(u8_mat, CV_8UC1, alpha, beta);
     save_path.str(std::string());
-    save_path << save_dir.str() << "rois_c.png";
+    save_path << save_dir.str() << info << "rois_c.png";
     cv::imwrite(save_path.str(), u8_mat);
 
-    /*cv::applyColorMap(u8_mat, cm_mat, cv::COLORMAP_JET);*/
-    /*save_path.str(std::string());*/
-    /*save_path << save_dir.str() << "rois_cj.png";*/
-    /*cv::imwrite(save_path.str(), cm_mat);*/
+    cv::applyColorMap(u8_mat, cm_mat, cv::COLORMAP_JET);
+    save_path.str(std::string());
+    save_path << save_dir.str() << info << "rois_cj.png";
+    cv::imwrite(save_path.str(), cm_mat);
 
     // 保存 score map
     cv::minMaxLoc(score_mat, &minVal, &maxVal);
@@ -207,13 +231,13 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
 
     score_mat.convertTo(u8_mat, CV_8UC1, alpha, beta);
     save_path.str(std::string());
-    save_path << save_dir.str() << "rois_s.png";
+    save_path << save_dir.str() << info << "rois_s.png";
     cv::imwrite(save_path.str(), u8_mat);
 
-    // cv::applyColorMap(u8_mat, cm_mat, cv::COLORMAP_JET);
-    // save_path.str(std::string());
-    // save_path << save_dir.str() << "rois_sj.png";
-    // cv::imwrite(save_path.str(), cm_mat);
+    cv::applyColorMap(u8_mat, cm_mat, cv::COLORMAP_JET);
+    save_path.str(std::string());
+    save_path << save_dir.str() << info << "rois_sj.png";
+    cv::imwrite(save_path.str(), cm_mat);
 
     // 保存 norm map
     cv::divide(score_mat, count_mat, norma_mat);
@@ -224,13 +248,13 @@ void Show_rois(Blob<Dtype> *rois_blob, Blob<Dtype> *filter_blob,
 
     norma_mat.convertTo(u8_mat, CV_8UC1, alpha, beta);
     save_path.str(std::string());
-    save_path << save_dir.str() << "rois_n.png";
+    save_path << save_dir.str() << info << "rois_n.png";
     cv::imwrite(save_path.str(), u8_mat);
 
-    // cv::applyColorMap(u8_mat, cm_mat, cv::COLORMAP_JET);
-    // save_path.str(std::string());
-    // save_path << save_dir.str()<< "rois_nj.png";
-    // cv::imwrite(save_path.str(), cm_mat);
+    cv::applyColorMap(u8_mat, cm_mat, cv::COLORMAP_JET);
+    save_path.str(std::string());
+    save_path << save_dir.str() << info << "rois_nj.png";
+    cv::imwrite(save_path.str(), cm_mat);
   }
 }
 
@@ -567,20 +591,18 @@ __global__ void ScoreBBoxes(const int num_roi, const Dtype *const opg_data,
 
 template <typename Dtype>
 __global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
-                           const int num, const int channels,
                            const int height_im, const int width_im,
                            const Dtype *rois_data, const int num_class,
-                           const int cls_id, const Dtype threshold,
-                           const Dtype min_density, const Dtype min_mass,
-                           Dtype *const top_data) {
+                           const int cls_id, const Dtype min_density,
+                           const Dtype min_mass, Dtype *const top_data) {
   CUDA_KERNEL_LOOP(index, num_roi) {
     int rois_index = index;
 
     rois_data += 5 * rois_index;
-    Dtype wstart = round(rois_data[1]);
-    Dtype hstart = round(rois_data[2]);
-    Dtype wend = round(rois_data[3]);
-    Dtype hend = round(rois_data[4]);
+    int wstart = round(rois_data[1]);
+    int hstart = round(rois_data[2]);
+    int wend = round(rois_data[3]);
+    int hend = round(rois_data[4]);
 
     // Check RoI
     if (wstart >= 0 && hstart >= 0 && wstart < wend && hstart < hend &&
@@ -588,7 +610,6 @@ __global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
     } else {
       top_data[rois_index * num_class + cls_id] = kMIN_SCORE;
       // 这里面是for循环，用return会中断后续的循环
-      // return;
       continue;
     }
 
@@ -597,36 +618,24 @@ __global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
     Dtype height_roi = hend - hstart;
     Dtype context_scale = 1.8;
     // Dtype context_scale = sqrtf(2.0);
-    Dtype width_roi_inner = width_roi / context_scale;
-    Dtype height_roi_inner = height_roi / context_scale;
-    Dtype width_roi_outer = width_roi * context_scale;
-    Dtype height_roi_outer = height_roi * context_scale;
-    Dtype wcenter = (wend + wstart) / 2.0;
-    Dtype hcenter = (hend + hstart) / 2.0;
+    Dtype width_roi_inner = 1.0 * width_roi / context_scale;
+    Dtype height_roi_inner = 1.0 * height_roi / context_scale;
+    Dtype width_roi_outer = 1.0 * width_roi * context_scale;
+    Dtype height_roi_outer = 1.0 * height_roi * context_scale;
+    Dtype wcenter = 1.0 * (wend + wstart) / 2.0;
+    Dtype hcenter = 1.0 * (hend + hstart) / 2.0;
 
-    Dtype wstart_inner = wcenter - width_roi_inner / 2.0;
-    Dtype hstart_inner = hcenter - height_roi_inner / 2.0;
-    Dtype wend_inner = wcenter + width_roi_inner / 2.0;
-    Dtype hend_inner = hcenter + height_roi_inner / 2.0;
+    int wstart_inner = round(wcenter - width_roi_inner / 2.0);
+    int hstart_inner = round(hcenter - height_roi_inner / 2.0);
+    int wend_inner = round(wcenter + width_roi_inner / 2.0);
+    int hend_inner = round(hcenter + height_roi_inner / 2.0);
 
-    Dtype wstart_outer = max(wcenter - width_roi_outer / 2.0, 0.0);
-    Dtype hstart_outer = max(hcenter - height_roi_outer / 2.0, 0.0);
-    Dtype wend_outer = min(wcenter + width_roi_outer / 2.0, width_im - 1.0);
-    Dtype hend_outer = min(hcenter + height_roi_outer / 2.0, height_im - 1.0);
-
-    // assign the coordinate to pixel
-    wstart = round(wstart);
-    hstart = round(hstart);
-    wend = round(wend);
-    hend = round(hend);
-    wstart_inner = round(wstart_inner);
-    hstart_inner = round(hstart_inner);
-    wend_inner = round(wend_inner);
-    hend_inner = round(hend_inner);
-    wstart_outer = round(wstart_outer);
-    hstart_outer = round(hstart_outer);
-    wend_outer = round(wend_outer);
-    hend_outer = round(hend_outer);
+    int wstart_outer = round(max(wcenter - width_roi_outer / 2.0, 0.0));
+    int hstart_outer = round(max(hcenter - height_roi_outer / 2.0, 0.0));
+    int wend_outer =
+        round(min(wcenter + width_roi_outer / 2.0, width_im - 1.0));
+    int hend_outer =
+        round(min(hcenter + height_roi_outer / 2.0, height_im - 1.0));
 
     width_roi = wend - wstart + 1;
     height_roi = hend - hstart + 1;
@@ -635,38 +644,45 @@ __global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
     width_roi_outer = wend_outer - wstart_outer + 1;
     height_roi_outer = hend_outer - hstart_outer + 1;
 
+    // a1-a2-a3+a4
+    Dtype a1, a2, a3, a4;
+
     // CPG sum of RoI
-    Dtype sum_roi = 0.0;
+    a1 = opg_data[hend * width_im + wend];
+    a2 = (wstart - 1 >= 0) ? opg_data[hend * width_im + (wstart - 1)] : 0;
+    a3 = (hstart - 1 >= 0) ? opg_data[(hstart - 1) * width_im + wend] : 0;
+    a4 = (hstart - 1 >= 0 && wstart - 1 >= 0)
+             ? opg_data[(hstart - 1) * width_im + (wstart - 1)]
+             : 0;
+    Dtype sum_roi = a1 - a2 - a3 + a4;
+
     // CPG sum of inner RoI
-    Dtype sum_inner = 0.0;
+    a1 = opg_data[hend_inner * width_im + wend_inner];
+    a2 = (wstart_inner - 1 >= 0)
+             ? opg_data[hend_inner * width_im + (wstart_inner - 1)]
+             : 0;
+    a3 = (hstart_inner - 1 >= 0)
+             ? opg_data[(hstart_inner - 1) * width_im + wend_inner]
+             : 0;
+    a4 = (hstart_inner - 1 >= 0 && wstart_inner - 1 >= 0)
+             ? opg_data[(hstart_inner - 1) * width_im + (wstart_inner - 1)]
+             : 0;
+    Dtype sum_inner = a1 - a2 - a3 + a4;
+
     // CPG sum of outer RoI
-    Dtype sum_outer = 0.0;
-    for (int c = 0; c < channels; ++c) {
-      for (int h = hstart_outer; h <= hend_outer; ++h) {
-        for (int w = wstart_outer; w <= wend_outer; ++w) {
-          int data_index = (c * height_im + h) * width_im + w;
-          Dtype g = opg_data[data_index];
-          if (g < threshold) {
-            continue;
-          }
+    a1 = opg_data[hend_outer * width_im + wend_outer];
+    a2 = (wstart_outer - 1 >= 0)
+             ? opg_data[hend_outer * width_im + (wstart_outer - 1)]
+             : 0;
+    a3 = (hstart_outer - 1 >= 0)
+             ? opg_data[(hstart_outer - 1) * width_im + wend_outer]
+             : 0;
+    a4 = (hstart_outer - 1 >= 0 && wstart_outer - 1 >= 0)
+             ? opg_data[(hstart_outer - 1) * width_im + (wstart_outer - 1)]
+             : 0;
+    Dtype sum_outer = a1 - a2 - a3 + a4;
 
-          if (h >= hstart && h <= hend && w >= wstart && w <= wend) {
-            /*sum_roi += g;*/
-            sum_roi++;
-          }
-
-          if (h >= hstart_inner && h <= hend_inner && w >= wstart_inner &&
-              w <= wend_inner) {
-            /*sum_inner += g;*/
-            sum_inner++;
-          }
-
-          /*sum_outer += g;*/
-          sum_outer++;
-        }
-      }
-    }
-
+    // area size
     Dtype area_roi = height_roi * width_roi;
     Dtype area_inner = height_roi_inner * width_roi_inner;
     Dtype area_outer = height_roi_outer * width_roi_outer;
@@ -717,116 +733,21 @@ __global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
 }
 
 template <typename Dtype>
-__global__ void SumBBoxes(const int num_roi, const Dtype *opg_data,
-                          const int num, const int channels,
-                          const int height_im, const int width_im,
-                          const Dtype *rois_data, const int num_class,
-                          const int cls_id, const Dtype threshold,
-                          const Dtype min_density, const Dtype min_mass,
-                          Dtype *const top_data) {
-  CUDA_KERNEL_LOOP(index, num_roi) {
-    int rois_index = index;
-
-    rois_data += 5 * rois_index;
-    int wstart = max(static_cast<int>(round(rois_data[1])), 0);
-    int hstart = max(static_cast<int>(round(rois_data[2])), 0);
-    int wend = min(static_cast<int>(round(rois_data[3])), width_im);
-    int hend = min(static_cast<int>(round(rois_data[4])), height_im);
-
-    Dtype height_roi = hend - hstart + 1;
-    Dtype width_roi = wend - wstart + 1;
-    Dtype context_scale = static_cast<Dtype>(1.8);
-    Dtype height_roi_inner = static_cast<Dtype>(height_roi) / context_scale;
-    Dtype width_roi_inner = static_cast<Dtype>(width_roi) / context_scale;
-    Dtype height_roi_outer = static_cast<Dtype>(height_roi) * context_scale;
-    Dtype width_roi_outer = static_cast<Dtype>(width_roi) * context_scale;
-    Dtype hcenter = static_cast<Dtype>(hend + hstart) / 2;
-    Dtype wcenter = static_cast<Dtype>(wend + wstart) / 2;
-
-    int wstart_inner =
-        max(static_cast<int>(floor(wcenter - width_roi_inner / 2)), 0);
-    int hstart_inner =
-        max(static_cast<int>(floor(hcenter - height_roi_inner / 2)), 0);
-    int wend_inner = min(
-        static_cast<int>(ceil(wcenter + width_roi_inner / 2)) + 1, width_im);
-    int hend_inner = min(
-        static_cast<int>(ceil(hcenter + height_roi_inner / 2)) + 1, height_im);
-
-    int wstart_outer =
-        max(static_cast<int>(floor(wcenter - width_roi_outer / 2)), 0);
-    int hstart_outer =
-        max(static_cast<int>(floor(hcenter - height_roi_outer / 2)), 0);
-    int wend_outer = min(
-        static_cast<int>(ceil(wcenter + width_roi_outer / 2)) + 1, width_im);
-    int hend_outer = min(
-        static_cast<int>(ceil(hcenter + height_roi_outer / 2)) + 1, height_im);
-
-    // CPG sum of RoI
-    Dtype sum_roi = 0;
-    // CPG sum of inner RoI
-    Dtype sum_inner = 0;
-    // CPG sum of outer RoI
-    Dtype sum_outer = 0;
-    for (int c = 0; c < channels; ++c) {
-      for (int h = hstart_outer; h < hend_outer; ++h) {
-        for (int w = wstart_outer; w < wend_outer; ++w) {
-          int data_index = (c * height_im + h) * width_im + w;
-          Dtype g = opg_data[data_index];
-          if (g < threshold) {
-            continue;
-          }
-
-          if (h > hstart && h < hend && w > wstart && w < wend) {
-            /*sum_roi += g;*/
-            sum_roi++;
-          }
-
-          if (h > hstart_inner && h < hend_inner && w > wstart_inner &&
-              w < wend_inner) {
-            /*sum_inner += g;*/
-            sum_inner++;
-          }
-
-          /*sum_outer += g;*/
-          sum_outer++;
-        }
-      }
+void integral_cpu(const Dtype *src, Dtype *sum, const int height,
+                  const int width) {
+  Dtype s = 0;
+  for (int x = 0; x < width; x++) {
+    s += src[x];
+    sum[x] = s;
+  }
+  src += width;
+  sum += width;
+  for (int y = 1; y < height; y++, src += width, sum += width) {
+    s = 0;
+    for (int x = 0; x < width; x++) {
+      s += src[x];
+      sum[x] = sum[x - width] + s;
     }
-
-    Dtype area_roi = height_roi * width_roi;
-    Dtype area_inner = height_roi_inner * width_roi_inner;
-    Dtype area_outer = height_roi_outer * width_roi_outer;
-
-    Dtype area_frame = max(area_roi - area_inner, Dtype(1));
-    Dtype area_context = max(area_outer - area_roi, Dtype(1));
-
-    // current best
-    Dtype score = (sum_roi - sum_inner) / sqrt(area_frame) -
-                  (sum_outer - sum_roi) / sqrt(area_context);
-
-    // Dtype score = (sum_roi - (sum_outer - sum_roi)) / sqrt(area_roi);
-    // Dtype score = (sum_roi - (sum_outer - sum_roi)) / (area_roi);
-
-    // (msra 0101): bad
-    // Dtype score = sqrt((sum_roi - sum_inner) / area_frame) -
-    //               sqrt((sum_outer - sum_roi) / area_context);
-
-    // (msra 12.30): very bad
-    // Dtype score =
-    //    (sum_roi - sum_inner) / area_frame - (sum_outer - sum_roi) /
-    // area_context;
-
-    // (msra 12.29): bad
-    // Dtype score = ((sum_roi - sum_inner) - (sum_outer - sum_roi)) /
-    // area_frame;
-
-    // (msra 0105): bad than (msra 12.29)
-    // Dtype score = ((sum_roi - sum_inner) - (sum_outer - sum_roi)) /
-    // sqrt(area_frame);
-
-    // if (sum_roi < min_mass) score = -1.0;
-
-    top_data[rois_index * num_class + cls_id] = score;
   }
 }
 
@@ -978,11 +899,9 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
         const Dtype maxval = raw_data_->cpu_data()[max_value_index];
         const Dtype threshold = maxval * fg_threshold_;
 
-        // NOLINT_NEXT_LINE(whitespace/operators)
-        get_above_mask<Dtype> << <CAFFE_GET_BLOCKS(size_opg_),
-                                  CAFFE_CUDA_NUM_THREADS>>>
-            (size_opg_, raw_data_->gpu_data(), raw_data_->mutable_gpu_diff(),
-             threshold);
+        caffe_gpu_binary(size_opg_, raw_data_->gpu_data(),
+                         raw_data_->mutable_gpu_diff(), threshold);
+
         Dtype im_mass;
         caffe_gpu_asum(size_opg_, raw_data_->gpu_diff(), &im_mass);
         const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
@@ -994,13 +913,19 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                   << " im_density: " << im_density;
         LOG_IF(INFO, debug_info_) << "SumBBoxes:";
 
+        integral_cpu(raw_data_->cpu_diff(), raw_data_->mutable_cpu_data(),
+                     height_im_, width_im_);
+
+        CHECK_EQ(raw_data_->cpu_data()[size_opg_ - 1], im_mass)
+            << "Should be equal.";
+
         // NOLINT_NEXT_LINE(whitespace/operators)
         CPGPooling<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
                               CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
+            (num_roi_, raw_data_->gpu_data(), height_im_, width_im_,
              bottom[bottom_index_["rois"]]->gpu_data(), num_class_, cls_id,
-             threshold, im_density * density_threshold_,
-             im_mass * mass_threshold_, filter_.mutable_gpu_data());
+             im_density * density_threshold_, im_mass * mass_threshold_,
+             filter_.mutable_gpu_data());
 
         Dtype re_predict = 0;
 
@@ -1108,9 +1033,20 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   // Show patch
   //----------------------------------------------------------------------
   if (debug_info_) {
-    Show_rois(bottom[bottom_index_["rois"]], &filter_,
-              bottom[bottom_index_["label"]], pass_im_, num_im_, voc_label_,
-              ignore_label_, predict_threshold_);
+    Show_rois(bottom[bottom_index_["rois"]]->cpu_data(), filter_.cpu_data(),
+              bottom_label, pass_im_, num_im_, num_class_, num_roi_, voc_label_,
+              "_w_", predict_threshold_, true);
+
+    Show_rois(bottom[bottom_index_["rois"]]->cpu_data(), rois_score,
+              bottom_label, pass_im_, num_im_, num_class_, num_roi_, voc_label_,
+              "_s_", predict_threshold_, true);
+
+    caffe_gpu_mul(num_class_ * num_roi_, filter_.gpu_data(),
+                  bottom[bottom_index_["rois_score"]]->gpu_data(),
+                  filter_.mutable_gpu_diff());
+    Show_rois(bottom[bottom_index_["rois"]]->cpu_data(), filter_.cpu_diff(),
+              bottom_label, pass_im_, num_im_, num_class_, num_roi_, voc_label_,
+              "_ws_", predict_threshold_, true);
   }
 
   // get the final output from filter

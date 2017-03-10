@@ -55,7 +55,12 @@ void caffe_gpu_without(const int N, Dtype* const x, const Dtype without,
 
 template <typename Dtype>
 void caffe_gpu_threshold(const int N, const Dtype* const x, Dtype* const y,
-                         const Dtype threshold, const bool for_max);
+                         const Dtype threshold, const Dtype replace,
+                         const bool for_max);
+
+template <typename Dtype>
+void caffe_gpu_binary(const int N, const Dtype* const x, Dtype* const y,
+                      const Dtype threshold);
 
 #endif  // !CPU_ONLY
 

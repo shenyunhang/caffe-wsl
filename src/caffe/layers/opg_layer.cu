@@ -291,8 +291,8 @@ void Show_blob(const Dtype *data, const int channels, const int height,
             << " mean: " << mean;
   LOG(INFO) << "save_path: " << save_path;
 
-  // cv::applyColorMap(opg_mat, opg_mat_jet, cv::COLORMAP_JET);
-  // cv::imwrite(save_path_jet, opg_mat_jet);
+   cv::applyColorMap(opg_mat, opg_mat_jet, cv::COLORMAP_JET);
+   cv::imwrite(save_path_jet, opg_mat_jet);
 
   //-----------------------------------------------------------------------
 

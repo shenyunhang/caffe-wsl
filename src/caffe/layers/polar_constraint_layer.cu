@@ -17,11 +17,11 @@ void PolarConstraintLayer<Dtype>::Forward_gpu(
   if (polar_) {
     // minima is 0
     caffe_gpu_threshold(count_, filter_.gpu_data(), filter_.mutable_gpu_data(),
-                        Dtype(0), false);
+                        Dtype(0), Dtype(0), false);
   } else {
     // maxima is 0
     caffe_gpu_threshold(count_, filter_.gpu_data(), filter_.mutable_gpu_data(),
-                        Dtype(0), true);
+                        Dtype(0), Dtype(0), true);
     caffe_gpu_scal(count_, Dtype(-1), filter_.mutable_gpu_data());
   }
   caffe_gpu_mul(count_, filter_.gpu_data(), bottom[0]->gpu_data(),

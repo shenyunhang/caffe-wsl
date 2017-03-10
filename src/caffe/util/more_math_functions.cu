@@ -126,10 +126,11 @@ template void caffe_gpu_without<double>(const int N, double* const x,
 
 template <typename Dtype>
 __global__ void threshold_min_kernel(const int N, const Dtype* const x,
-                                     Dtype* const y, const Dtype threshold) {
+                                     Dtype* const y, const Dtype threshold,
+                                     const Dtype replace) {
   CUDA_KERNEL_LOOP(index, N) {
     if (x[index] < threshold)
-      y[index] = threshold;
+      y[index] = replace;
     else
       y[index] = x[index];
   }
@@ -137,10 +138,11 @@ __global__ void threshold_min_kernel(const int N, const Dtype* const x,
 
 template <typename Dtype>
 __global__ void threshold_max_kernel(const int N, const Dtype* const x,
-                                     Dtype* const y, const Dtype threshold) {
+                                     Dtype* const y, const Dtype threshold,
+                                     const Dtype replace) {
   CUDA_KERNEL_LOOP(index, N) {
     if (x[index] > threshold)
-      y[index] = threshold;
+      y[index] = replace;
     else
       y[index] = x[index];
   }
@@ -148,26 +150,53 @@ __global__ void threshold_max_kernel(const int N, const Dtype* const x,
 
 template <typename Dtype>
 void caffe_gpu_threshold(const int N, const Dtype* const x, Dtype* const y,
-                         const Dtype threshold, const bool for_max) {
+                         const Dtype threshold, const Dtype replace,
+                         const bool for_max) {
   if (for_max) {
     // NOLINT_NEXT_LINE(whitespace/operators)
     threshold_max_kernel<Dtype> << <CAFFE_GET_BLOCKS(N),
                                     CAFFE_CUDA_NUM_THREADS>>>
-        (N, x, y, threshold);
+        (N, x, y, threshold, replace);
   } else {
     // NOLINT_NEXT_LINE(whitespace/operators)
     threshold_min_kernel<Dtype> << <CAFFE_GET_BLOCKS(N),
                                     CAFFE_CUDA_NUM_THREADS>>>
-        (N, x, y, threshold);
+        (N, x, y, threshold, replace);
   }
 }
 
 template void caffe_gpu_threshold<float>(const int N, const float* const x,
                                          float* const y, const float threshold,
+                                         const float replace,
                                          const bool for_max);
 template void caffe_gpu_threshold<double>(const int N, const double* const x,
                                           double* const y,
                                           const double threshold,
+                                          const double replace,
                                           const bool for_max);
+
+template <typename Dtype>
+__global__ void binary_kernel(const int N, const Dtype* const x, Dtype* const y,
+                              const Dtype threshold) {
+  CUDA_KERNEL_LOOP(index, N) {
+    if (x[index] >= threshold)
+      y[index] = 1;
+    else
+      y[index] = 0;
+  }
+}
+
+template <typename Dtype>
+void caffe_gpu_binary(const int N, const Dtype* const x, Dtype* const y,
+                      const Dtype threshold) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  binary_kernel<Dtype> << <CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>>
+      (N, x, y, threshold);
+}
+
+template void caffe_gpu_binary<float>(const int N, const float* const x,
+                                      float* const y, const float threshold);
+template void caffe_gpu_binary<double>(const int N, const double* const x,
+                                       double* const y, const double threshold);
 
 }  // namespace caffe
