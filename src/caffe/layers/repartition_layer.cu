@@ -63,7 +63,7 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
                const string info, const float predict_threshold,
                const bool jet = false) {
   const int each_page_num = 10000;
-  const int line_width = 6;
+  const int line_width = 4;
 
   cv::RNG rng(12345);
   stringstream save_path;
@@ -92,12 +92,13 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
     save_dir << "tmp/" << voc_label[c] << "/" << save_id << "/";
     boost::filesystem::create_directories(save_dir.str());
 
-    set<int> show_ix;
+    vector<int> show_ix;
+    Dtype score_scale;
     for (int t = 0; t < 10; ++t) {
       Dtype max_roi_score = kMIN_SCORE;
       int max_roi_ix = -1;
       for (int r = 0; r < num_roi; ++r) {
-        if (show_ix.find(r) == show_ix.end()) {
+        if (std::find(show_ix.begin(), show_ix.end(), r) == show_ix.end()) {
         } else {
           continue;
         }
@@ -107,14 +108,20 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
           max_roi_ix = r;
         }
       }
-      show_ix.insert(max_roi_ix);
+      show_ix.push_back(max_roi_ix);
+      if (t == 0) {
+        score_scale = max_roi_score;
+      }
     }
 
     cv::Mat add_mat(im_mat.rows, im_mat.cols, CV_32FC1);
     cv::Mat count_mat(im_mat.rows, im_mat.cols, CV_32FC1, cv::Scalar(0));
     cv::Mat score_mat(im_mat.rows, im_mat.cols, CV_32FC1, cv::Scalar(0));
     cv::Mat norma_mat(im_mat.rows, im_mat.cols, CV_32FC1, cv::Scalar(0));
-    for (int r = 0, page = 0; r < num_roi; ++r) {
+    // for (int r = 0, page = 0; r < num_roi; ++r) {
+    for (int t = show_ix.size() - 1, page = 0; t >= 0; --t) {
+      int r = show_ix[t];
+
       // rois: n x1 y1 x2 y2
       // rec: x y w h
 
@@ -159,10 +166,9 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
       if (rois_score < 0) {
         rois_score = 0;
       }
-      // rois_score=1-rois_score;
-      //
-      if (show_ix.find(r) == show_ix.end()) {
-      } else {
+
+      {
+        rois_score = rois_score / score_scale;
         cv::rectangle(im_mat_o, rec, gray2jet(abs(rois_score)), line_width);
       }
 
@@ -173,7 +179,8 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
       // line_width);
 
       // 如果r+1整除each_page_num或者r是最后一个
-      if ((r + 1) % each_page_num == 0 || r == num_roi - 1) {
+      // if ((r + 1) % each_page_num == 0 || r == num_roi - 1) {
+      if ((show_ix.size() - t) % each_page_num == 0 || t == 0) {
         save_path.str(std::string());
         save_path.precision(4);
         save_path << save_dir.str() << (rois_score > 0 ? "+" : "-")
