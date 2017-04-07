@@ -291,8 +291,8 @@ void Show_blob(const Dtype *data, const int channels, const int height,
             << " mean: " << mean;
   LOG(INFO) << "save_path: " << save_path;
 
-   cv::applyColorMap(opg_mat, opg_mat_jet, cv::COLORMAP_JET);
-   cv::imwrite(save_path_jet, opg_mat_jet);
+  cv::applyColorMap(opg_mat, opg_mat_jet, cv::COLORMAP_JET);
+  cv::imwrite(save_path_jet, opg_mat_jet);
 
   //-----------------------------------------------------------------------
 
@@ -619,13 +619,20 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     caffe_gpu_set(im_blob_->count(), static_cast<Dtype>(0),
                   im_blob_->mutable_gpu_diff());
 
-    Dtype *predict_diff = predict_blob_->mutable_cpu_diff();
-    predict_diff[index] = predict_data[index];
+    // Dtype *predict_diff = predict_blob_->mutable_cpu_diff();
+    // predict_diff[index] = predict_data[index];
 
-    if (predict_data[index] == 1.0) {
-      predict_diff[index] = 0.999;
-    } else {
-    }
+    // Gradient 1
+    // predict_diff[index] = 1;
+
+    // Gradient all
+    caffe_copy(predict_blob_->count(), predict_blob_->gpu_data(),
+               predict_blob_->mutable_gpu_diff());
+
+    //if (predict_data[index] == 1.0) {
+      //predict_diff[index] = 0.999;
+    //} else {
+    //}
 
     // if test, we always try find cache first
     if (this->phase_ == TEST && false) {
