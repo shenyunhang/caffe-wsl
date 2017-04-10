@@ -619,20 +619,20 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     caffe_gpu_set(im_blob_->count(), static_cast<Dtype>(0),
                   im_blob_->mutable_gpu_diff());
 
-    // Dtype *predict_diff = predict_blob_->mutable_cpu_diff();
-    // predict_diff[index] = predict_data[index];
+    Dtype *predict_diff = predict_blob_->mutable_cpu_diff();
+    predict_diff[index] = predict_data[index];
 
     // Gradient 1
     // predict_diff[index] = 1;
 
     // Gradient all
-    caffe_copy(predict_blob_->count(), predict_blob_->gpu_data(),
-               predict_blob_->mutable_gpu_diff());
+    // caffe_copy(predict_blob_->count(), predict_blob_->gpu_data(),
+    // predict_blob_->mutable_gpu_diff());
 
-    //if (predict_data[index] == 1.0) {
-      //predict_diff[index] = 0.999;
-    //} else {
-    //}
+    if (predict_data[index] == 1.0) {
+      predict_diff[index] = 0.99999;
+    } else {
+    }
 
     // if test, we always try find cache first
     if (this->phase_ == TEST && false) {

@@ -1,10 +1,3 @@
-// ------------------------------------------------------------------
-// Fast R-CNN
-// Copyright (c) 2015 Microsoft
-// Licensed under The MIT License [see fast-rcnn/LICENSE for details]
-// Written by Ross Girshick
-// ------------------------------------------------------------------
-
 #include <cfloat>
 
 #include "caffe/layers/roi_align_layer.hpp"
@@ -30,14 +23,14 @@ __global__ void ROIAlignForward(const int nthreads, const Dtype* bottom_data,
 
     bottom_rois += n * 5;
     int roi_batch_ind = bottom_rois[0];
-    Dtype roi_start_w = bottom_rois[1] * spatial_scale;
-    Dtype roi_start_h = bottom_rois[2] * spatial_scale;
-    Dtype roi_end_w = bottom_rois[3] * spatial_scale;
-    Dtype roi_end_h = bottom_rois[4] * spatial_scale;
+    Dtype roi_start_w = (bottom_rois[1] + 0.5) * spatial_scale - 0.5;
+    Dtype roi_start_h = (bottom_rois[2] + 0.5) * spatial_scale - 0.5;
+    Dtype roi_end_w = (bottom_rois[3] + 0.5) * spatial_scale - 0.5;
+    Dtype roi_end_h = (bottom_rois[4] + 0.5) * spatial_scale - 0.5;
 
     // Force malformed ROIs to be 1x1
-    Dtype roi_width = roi_end_w - roi_start_w + 1;
-    Dtype roi_height = roi_end_h - roi_start_h + 1;
+    Dtype roi_width = roi_end_w - roi_start_w;
+    Dtype roi_height = roi_end_h - roi_start_h;
 
     Dtype bin_size_h = roi_height / static_cast<Dtype>(pooled_height);
     Dtype bin_size_w = roi_width / static_cast<Dtype>(pooled_width);
@@ -48,14 +41,10 @@ __global__ void ROIAlignForward(const int nthreads, const Dtype* bottom_data,
     Dtype wend = static_cast<Dtype>(pw + 1) * bin_size_w;
 
     // Add roi offsets and clip to input boundaries
-    hstart = min(max(hstart + roi_start_h, static_cast<Dtype>(0)),
-                 static_cast<Dtype>(height));
-    hend = min(max(hend + roi_start_h, static_cast<Dtype>(0)),
-               static_cast<Dtype>(height));
-    wstart = min(max(wstart + roi_start_w, static_cast<Dtype>(0)),
-                 static_cast<Dtype>(width));
-    wend = min(max(wend + roi_start_w, static_cast<Dtype>(0)),
-               static_cast<Dtype>(width));
+    hstart = hstart + roi_start_h;
+    hend = hend + roi_start_h;
+    wstart = wstart + roi_start_w;
+    wend = wend + roi_start_w;
     bool is_empty = (hend <= hstart) || (wend <= wstart);
 
     // Define an empty pooling region to be zero
@@ -156,10 +145,10 @@ __global__ void ROIAlignBackward(const int nthreads, const Dtype* top_diff,
         continue;
       }
 
-      Dtype roi_start_w = offset_bottom_rois[1] * spatial_scale;
-      Dtype roi_start_h = offset_bottom_rois[2] * spatial_scale;
-      Dtype roi_end_w = offset_bottom_rois[3] * spatial_scale;
-      Dtype roi_end_h = offset_bottom_rois[4] * spatial_scale;
+      Dtype roi_start_w = (offset_bottom_rois[1] + 0.5) * spatial_scale - 0.5;
+      Dtype roi_start_h = (offset_bottom_rois[2] + 0.5) * spatial_scale - 0.5;
+      Dtype roi_end_w = (offset_bottom_rois[3] + 0.5) * spatial_scale - 0.5;
+      Dtype roi_end_h = (offset_bottom_rois[4] + 0.5) * spatial_scale - 0.5;
 
       // Skip if ROI doesn't include (h, w)
       const bool in_roi = (w >= floor(roi_start_w) && w <= ceil(roi_end_w) &&
@@ -177,16 +166,18 @@ __global__ void ROIAlignBackward(const int nthreads, const Dtype* top_diff,
       // this bottom unit
 
       // Force malformed ROIs to be 1x1
-      Dtype roi_width = roi_end_w - roi_start_w + 1;
-      Dtype roi_height = roi_end_h - roi_start_h + 1;
+      Dtype roi_width = roi_end_w - roi_start_w;
+      Dtype roi_height = roi_end_h - roi_start_h;
 
       Dtype bin_size_h = roi_height / static_cast<Dtype>(pooled_height);
       Dtype bin_size_w = roi_width / static_cast<Dtype>(pooled_width);
 
-      int phstart = floor((h - roi_start_h) / bin_size_h);
-      int phend = ceil((h - roi_start_h + 1) / bin_size_h);
-      int pwstart = floor((w - roi_start_w) / bin_size_w);
-      int pwend = ceil((w - roi_start_w + 1) / bin_size_w);
+      int phstart = floor((static_cast<Dtype>(h) - roi_start_h) / bin_size_h);
+      int phend =
+          ceil((static_cast<Dtype>(h) - roi_start_h + 1.0) / bin_size_h);
+      int pwstart = floor((static_cast<Dtype>(w) - roi_start_w) / bin_size_w);
+      int pwend =
+          ceil((static_cast<Dtype>(w) - roi_start_w + 1.0) / bin_size_w);
 
       phstart = min(max(phstart, 0), pooled_height);
       phend = min(max(phend, 0), pooled_height);
