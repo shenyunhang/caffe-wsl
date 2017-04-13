@@ -43,10 +43,14 @@ __global__ void ROIAlignForward2(const int nthreads, const Dtype* bottom_data,
     int wend = static_cast<int>(ceil(static_cast<Dtype>(pw + 1) * bin_size_w));
 
     // Add roi offsets and clip to input boundaries
-    hstart = min(max(hstart + roi_start_h, 0), height);
-    hend = min(max(hend + roi_start_h, 0), height);
-    wstart = min(max(wstart + roi_start_w, 0), width);
-    wend = min(max(wend + roi_start_w, 0), width);
+    hstart = min(max(hstart + roi_start_h, 0),
+                 static_cast<int>(static_cast<Dtype>(height) / spatial_scale));
+    hend = min(max(hend + roi_start_h, 0),
+               static_cast<int>(static_cast<Dtype>(height) / spatial_scale));
+    wstart = min(max(wstart + roi_start_w, 0),
+                 static_cast<int>(static_cast<Dtype>(width) / spatial_scale));
+    wend = min(max(wend + roi_start_w, 0),
+               static_cast<int>(static_cast<Dtype>(width) / spatial_scale));
     bool is_empty = (hend <= hstart) || (wend <= wstart);
 
     // Define an empty pooling region to be zero
@@ -152,8 +156,10 @@ __global__ void ROIAlignForward(const int nthreads, const Dtype* bottom_data,
     Dtype maxidx_w = -1;
     Dtype maxidx_h = -1;
     bottom_data += (roi_batch_ind * channels + c) * height * width;
-    for (Dtype h = hstart; h < hend; h += 1.) {
-      for (Dtype w = wstart; w < wend; w += 1.) {
+    //for (Dtype h = hstart; h < hend; h += 0.5) {
+      //for (Dtype w = wstart; w < wend; w += 0.5) {
+    for (Dtype h = hstart+bin_size_h/4; h < hend; h += bin_size_h/2) {
+      for (Dtype w = wstart+bin_size_w/4; w < wend; w += bin_size_w/2) {
         // select four regular locations for bilinear interpolation
         int x_left = floor(w);
         int x_right = ceil(w);
@@ -210,7 +216,7 @@ void ROIAlignLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   Dtype* argmax_data_h = max_idx_h_.mutable_gpu_data();
   int count = top[0]->count();
   // NOLINT_NEXT_LINE(whitespace/operators)
-  ROIAlignForward2<Dtype> << <CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>
+  ROIAlignForward<Dtype> << <CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>
       (count, bottom_data, spatial_scale_, channels_, height_, width_,
        pooled_height_, pooled_width_, bottom_rois, top_data, argmax_data_w,
        argmax_data_h);
@@ -247,10 +253,6 @@ __global__ void ROIAlignBackward2(const int nthreads, const Dtype* top_diff,
       int roi_start_h = round(bottom_rois[2]);
       int roi_end_w = round(bottom_rois[3]);
       int roi_end_h = round(bottom_rois[4]);
-      // Dtype roi_start_w = (roi_start_w + 0.5) * spatial_scale - 0.5;
-      // Dtype roi_start_h = (roi_start_h + 0.5) * spatial_scale - 0.5;
-      // Dtype roi_end_w = (roi_end_w + 0.5) * spatial_scale - 0.5;
-      // Dtype roi_end_h = (roi_end_h + 0.5) * spatial_scale - 0.5;
 
       // Skip if ROI doesn't include (h, w)
       const bool in_roi =
@@ -279,13 +281,13 @@ __global__ void ROIAlignBackward2(const int nthreads, const Dtype* top_diff,
       Dtype bin_size_w =
           static_cast<Dtype>(roi_width) / static_cast<Dtype>(pooled_width);
 
-      int phstart = floor(((static_cast<Dtype>(h) + 0.5 - 0.5) / spatial_scale -
+      int phstart = floor(((static_cast<Dtype>(h) - 0.5 + 0.5) / spatial_scale -
                            0.5 - roi_start_h) /
                           bin_size_h);
       int phend = ceil(((static_cast<Dtype>(h) + 0.5 + 0.5) / spatial_scale -
                         0.5 - roi_start_h) /
                        bin_size_h);
-      int pwstart = floor(((static_cast<Dtype>(w) + 0.5 - 0.5) / spatial_scale -
+      int pwstart = floor(((static_cast<Dtype>(w) - 0.5 + 0.5) / spatial_scale -
                            0.5 - roi_start_w) /
                           bin_size_w);
       int pwend = ceil(((static_cast<Dtype>(w) + 0.5 + 0.5) / spatial_scale -
@@ -438,7 +440,8 @@ void ROIAlignLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   const Dtype* argmax_data_w = max_idx_w_.gpu_data();
   const Dtype* argmax_data_h = max_idx_h_.gpu_data();
   // NOLINT_NEXT_LINE(whitespace/operators)
-  ROIAlignBackward2<Dtype> << <CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>
+  ROIAlignBackward<Dtype> << <CAFFE_GET_BLOCKS(count),
+                               CAFFE_CUDA_NUM_THREADS>>>
       (count, top_diff, argmax_data_w, argmax_data_h, top[0]->num(),
        spatial_scale_, channels_, height_, width_, pooled_height_,
        pooled_width_, bottom_diff, bottom_rois);

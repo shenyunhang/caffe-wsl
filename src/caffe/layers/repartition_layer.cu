@@ -94,7 +94,7 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
 
     vector<int> show_ix;
     Dtype score_scale;
-    for (int t = 0; t < 10; ++t) {
+    for (int t = 0; t < num_roi; ++t) {
       Dtype max_roi_score = kMIN_SCORE;
       int max_roi_ix = -1;
       for (int r = 0; r < num_roi; ++r) {
