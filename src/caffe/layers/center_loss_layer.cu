@@ -1,5 +1,5 @@
-#include <vector>
 #include <cfloat>
+#include <vector>
 
 #include "caffe/layers/center_loss_layer.hpp"
 #include "caffe/util/math_functions.hpp"
@@ -30,6 +30,10 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             max_value_index = r;
           }
         }
+      }
+      if (max_value_index == -1) {
+        LOG(FATAL) << "can not find enought roi.";
+        break;
       }
       roi_sets_[c].insert(max_value_index);
       LOG_IF(INFO, debug_info_) << "max_value_index: " << max_value_index
@@ -73,7 +77,7 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     dot += c_dot;
   }
 
-  Dtype loss = dot / num_gt_class_ / top_k_ / Dtype(2);
+  Dtype loss = dot / num_gt_class_ / top_k_ / dim_ / Dtype(2);
   top[0]->mutable_cpu_data()[0] = loss;
 
   accum_loss_ += loss;
@@ -109,7 +113,7 @@ void CenterLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
   caffe_gpu_set(bottom[0]->count(), Dtype(0), bottom[0]->mutable_gpu_diff());
 
-  const Dtype alpha = top[0]->cpu_diff()[0] / num_gt_class_ / top_k_;
+  const Dtype alpha = top[0]->cpu_diff()[0] / num_gt_class_ / top_k_ / dim_;
   const Dtype* diff_data = diff_.gpu_data();
   LOG_IF(INFO, debug_info_) << "alpha: " << alpha
                             << " weight: " << top[0]->cpu_diff()[0];
