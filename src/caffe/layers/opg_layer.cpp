@@ -35,14 +35,15 @@ template <typename Dtype>
 void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                  const vector<Blob<Dtype>*>& top) {
   CPGParameter this_layer_param = this->layer_param_.cpg_param();
-  LOG(INFO) << "type: " << this->layer_param_.type();
+  LOG(INFO) << "Layer type: " << this->layer_param_.type();
+  LOG_IF(INFO, debug_info_) << "Loading this layer param";
   is_opg_ = this_layer_param.is_cpg();
   is_order_ = this_layer_param.is_order();
-  debug_info_ = this_layer_param.debug_info();
   is_contrast_ = this_layer_param.is_contrast();
-  ignore_label_ = this_layer_param.ignore_label();
   predict_threshold_ = this_layer_param.predict_threshold();
   predict_order_ = this_layer_param.predict_order();
+  ignore_label_ = this_layer_param.ignore_label();
+  debug_info_ = this_layer_param.debug_info();
   start_layer_name_ = this_layer_param.start_layer_name();
   end_layer_name_ = this_layer_param.end_layer_name();
   for (size_t i = 0; i < this_layer_param.opg_blob_name().size(); ++i) {
@@ -64,6 +65,7 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   is_history_init_ = false;
 
   // init layer index
+  LOG_IF(INFO, debug_info_) << "Initing layer index";
   const vector<string> layer_names = net_->layer_names();
   for (size_t i = 0; i < layer_names.size(); i++) {
     if (layer_names[i].compare(start_layer_name_) == 0) {
@@ -96,9 +98,9 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
 
   // find net blob
+  LOG_IF(INFO, debug_info_) << "Finding net blob";
   {
     // set im blob and predictiob blob
-    LOG(INFO) << "finding net blob";
     // TODO(YH): the image blob means the first opg blob
     im_blob_ = net_->blobs()[opg_blob_index_[0]];
 
