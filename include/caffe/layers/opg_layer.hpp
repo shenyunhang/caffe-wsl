@@ -102,11 +102,11 @@ class OPGLayer : public Layer<Dtype> {
   vector<vector<bool> > bottom_need_backward_;
   vector<vector<bool> > origin_param_propagate_down_;
 
-  int num_class_;
   int num_im_;
+  int channels_im_;
   int height_im_;
   int width_im_;
-  int channels_im_;
+  int num_class_;
   int channels_opg_;
   int size_opg_;
 

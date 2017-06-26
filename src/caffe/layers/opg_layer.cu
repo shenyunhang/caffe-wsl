@@ -402,16 +402,17 @@ template <typename Dtype>
 bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
                                        const Dtype predict) {
   if (cls_id == ignore_label_) return false;
-  // assum score is betwween 0 ~ 1
+  // assum label is betwween 0 ~ 1
   if (this->phase_ == TRAIN) {
-    if (label <= 0.5) return false;
-    if (predict > predict_threshold_) {
+    if (label < 0.5) return false;
+    if (predict >= predict_threshold_) {
       return true;
     } else {
       return false;
     }
   } else if (this->phase_ == TEST) {
-    if (predict > predict_threshold_) {
+    // label is equal to predict in test
+    if (label >= predict_threshold_) {
       return true;
     } else {
       return false;
