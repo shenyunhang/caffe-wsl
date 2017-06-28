@@ -51,7 +51,6 @@ void OPGLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
 
   bottom_label_index_ = 0;
-  bottom_predict_index_ = 1;
 
   save_id_ = 0;
   is_show_ = true;
