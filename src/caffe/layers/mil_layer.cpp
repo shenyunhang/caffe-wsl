@@ -69,7 +69,7 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   cpg_layer_->Set_Net(net_);
   cpg_bottom_vec_.clear();
   cpg_bottom_vec_.push_back(bottom[bottom_index_["label"]]);
-  cpg_bottom_vec_.push_back(bottom[bottom_index_["predict"]]);
+  //cpg_bottom_vec_.push_back(bottom[bottom_index_["predict"]]);
   cpg_top_vec_.clear();
   cpg_top_vec_.push_back(&cpg_blob_);
   cpg_layer_->SetUp(cpg_bottom_vec_, cpg_top_vec_);
