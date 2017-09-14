@@ -87,10 +87,10 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
 	shared_ptr<MILLayer<Dtype> > mil=boost::dynamic_pointer_cast<MILLayer<Dtype> >(layers_[index]);
 	mil->Set_Net(this);
     }
-    if(layer_param.type().compare("OPG")==0){
+    if(layer_param.type().compare("CPG")==0){
         int index=layers_.size()-1;
-	shared_ptr<OPGLayer<Dtype> > opg=boost::dynamic_pointer_cast<OPGLayer<Dtype> >(layers_[index]);
-	opg->Set_Net(this);
+	shared_ptr<CPGLayer<Dtype> > cpg=boost::dynamic_pointer_cast<CPGLayer<Dtype> >(layers_[index]);
+	cpg->Set_Net(this);
     }
 
     layer_names_.push_back(layer_param.name());

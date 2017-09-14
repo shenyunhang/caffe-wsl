@@ -30,7 +30,7 @@ class RepartitionLayer : public Layer<Dtype> {
   //: Layer<Dtype>(param),
   // crf_layer_(new DenseCRFLayer<Dtype>(param)),
   // crf_output_(new Blob<Dtype>()),
-  // crf_opg_(new Blob<Dtype>()),
+  // crf_cpg_(new Blob<Dtype>()),
   // crf_data_dim_(new Blob<Dtype>()),
   // crf_data_(new Blob<Dtype>()) {}
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
@@ -64,7 +64,7 @@ class RepartitionLayer : public Layer<Dtype> {
                             const vector<bool>& propagate_down,
                             const vector<Blob<Dtype>*>& bottom);
 
-  bool is_opg_;
+  bool is_cpg_;
   bool debug_info_;
   bool is_order_;
 
@@ -84,6 +84,7 @@ class RepartitionLayer : public Layer<Dtype> {
 
   int display_;
   int pass_im_;
+  int max_num_im_cpg_;
 
   int order_K_;
   float order_threshold_;
@@ -98,8 +99,8 @@ class RepartitionLayer : public Layer<Dtype> {
   int num_roi_;
   int height_im_;
   int width_im_;
-  int channels_opg_;
-  int size_opg_;
+  int channels_cpg_;
+  int size_cpg_;
   int num_gt_;
 
   vector<int> gt_class_;
@@ -107,7 +108,7 @@ class RepartitionLayer : public Layer<Dtype> {
   // crf
   shared_ptr<DenseCRFLayer<Dtype> > crf_layer_;
   shared_ptr<Blob<Dtype> > crf_output_;
-  shared_ptr<Blob<Dtype> > crf_opg_;
+  shared_ptr<Blob<Dtype> > crf_cpg_;
   shared_ptr<Blob<Dtype> > crf_data_dim_;
   shared_ptr<Blob<Dtype> > crf_data_;
   vector<Blob<Dtype>*> crf_bottom_vec_;

@@ -10,7 +10,8 @@ template <typename Dtype>
 void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                          const vector<Blob<Dtype>*>& top) {
   CPGParameter this_layer_param = this->layer_param_.cpg_param();
-  is_opg_ = this_layer_param.is_cpg();
+  is_cpg_ = this_layer_param.is_cpg();
+  max_num_im_cpg_ = this_layer_param.max_num_im_cpg();
   debug_info_ = this_layer_param.debug_info();
   is_order_ = this_layer_param.is_order();
 
@@ -31,7 +32,7 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     case CPGParameter_Mode_CPG_POOLING:
       LOG(INFO) << "mode: CPG_POOLING";
       CHECK_EQ(is_order_, false)
-          << "In OPG_POOLING mode, is_order_ should be false.";
+          << "In CPG_POOLING mode, is_order_ should be false.";
       break;
     case CPGParameter_Mode_CRF:
       LOG(INFO) << "mode: CRF";
@@ -40,7 +41,7 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       LOG(FATAL) << "Unknown mode.";
   }
 
-  bottom_index_["opg"] = 0;
+  bottom_index_["cpg"] = 0;
   bottom_index_["label"] = 1;
   bottom_index_["predict"] = 2;
   bottom_index_["rois"] = 3;
@@ -63,7 +64,7 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
 
   LOG(INFO) << "----------------------------------------------";
-  LOG(INFO) << "is_opg_: " << is_opg_;
+  LOG(INFO) << "is_cpg_: " << is_cpg_;
   LOG(INFO) << "is_order_: " << is_order_;
   LOG(INFO) << "debug_info_: " << debug_info_;
   LOG(INFO) << "predict_threshold_:" << predict_threshold_;
@@ -77,14 +78,14 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   if (false) {
     crf_bottom_vec_.clear();
-    crf_bottom_vec_.push_back(crf_opg_.get());
+    crf_bottom_vec_.push_back(crf_cpg_.get());
     crf_bottom_vec_.push_back(crf_data_dim_.get());
     crf_bottom_vec_.push_back(crf_data_.get());
     crf_top_vec_.clear();
     crf_top_vec_.push_back(crf_output_.get());
 
     crf_data_->Reshape(1, 3, 1000, 1000);
-    crf_opg_->Reshape(1, 1, 1000, 1000);
+    crf_cpg_->Reshape(1, 1, 1000, 1000);
     crf_data_dim_->Reshape(1, 2, 1, 1);
     crf_layer_->SetUp(crf_bottom_vec_, crf_top_vec_);
   }
@@ -115,7 +116,6 @@ void RepartitionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                                       const vector<Blob<Dtype>*>& top) {
-
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_PRED:
       break;
@@ -130,17 +130,17 @@ void RepartitionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_CPG_POOLING:
-      channels_opg_ = 1;
-      height_im_ = bottom[bottom_index_["opg"]]->height();
-      width_im_ = bottom[bottom_index_["opg"]]->width();
-      size_opg_ = height_im_ * width_im_;
+      channels_cpg_ = 1;
+      height_im_ = bottom[bottom_index_["cpg"]]->height();
+      width_im_ = bottom[bottom_index_["cpg"]]->width();
+      size_cpg_ = height_im_ * width_im_;
       raw_data_->Reshape(1, 1, height_im_, width_im_);
 
       CHECK_EQ(bottom[bottom_index_["label"]]->num(),
-               bottom[bottom_index_["opg"]]->num())
+               bottom[bottom_index_["cpg"]]->num())
           << "bottom nums are not the same.";
-      LOG_IF(INFO, is_opg_ && debug_info_)
-          << "opg info: channels: " << channels_opg_
+      LOG_IF(INFO, is_cpg_ && debug_info_)
+          << "cpg info: channels: " << channels_cpg_
           << " height: " << height_im_ << " width: " << width_im_;
       break;
     case CPGParameter_Mode_CRF:

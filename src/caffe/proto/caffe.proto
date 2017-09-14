@@ -1255,32 +1255,33 @@ message SPPParameter {
   optional Engine engine = 6 [default = DEFAULT];
 }
 
-// Message that stores parameters used by OPGROISelectLayer
+// Message that stores parameters used by CPGLayer
 message CPGParameter {
   enum Mode {
     CPG_POOLING = 0;
     PRED = 1;
     CRF = 2;
   }
-  optional bool is_cpg = 21 [default = true];
-  optional bool is_contrast = 30 [default = false];
-  optional bool is_order = 41 [default = false];
-  optional bool debug_info = 22 [default = false];
+  optional bool is_cpg = 1 [default = true];
+  optional int32 max_num_im_cpg = 2 [default = 0];
+  optional bool is_contrast = 3 [default = false];
+  optional bool is_order = 4 [default = false];
+  optional bool debug_info = 5 [default = false];
 
-  optional Mode mode = 90 [default = CPG_POOLING];
-  optional int32 ignore_label = 70 [default = -1];
+  optional Mode mode = 11 [default = CPG_POOLING];
+  optional int32 ignore_label = 12 [default = -1];
 
-  required string start_layer_name = 23 [default = ''];
-  required string end_layer_name = 24 [default = ''];
-  repeated string opg_blob_name = 25;
-  optional float predict_threshold = 26 [default = 0.5];
-  optional float predict_order = 40 [default = 0.0];
-  optional float crf_threshold = 50 [default = 0.5];
+  required string start_layer_name = 21 [default = ''];
+  required string end_layer_name = 22 [default = ''];
+  repeated string cpg_blob_name = 23;
+  optional float predict_threshold = 24 [default = 0.5];
+  optional float predict_order = 25 [default = 0.0];
+  optional float crf_threshold = 26 [default = 0.5];
 
-  optional float fg_threshold = 51 [default = 0.5];
-  optional float bg_threshold = 52 [default = 0.001];
-  optional float mass_threshold = 53 [default = 0.0];
-  optional float density_threshold = 54 [default = 0.0];
+  optional float fg_threshold = 31 [default = 0.5];
+  optional float bg_threshold = 32 [default = 0.001];
+  optional float mass_threshold = 33 [default = 0.0];
+  optional float density_threshold = 34 [default = 0.0];
 }
 
 // Message that stores parameters used by PolarConstraintLayer

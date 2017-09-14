@@ -1,8 +1,8 @@
-#include <vector>
 #include <time.h>
 #include <boost/filesystem.hpp>
+#include <vector>
 
-#include "caffe/layers/opg_layer.hpp"
+#include "caffe/layers/cpg_layer.hpp"
 #include "caffe/util/interp.hpp"
 #include "caffe/util/io.hpp"
 #include "caffe/util/math_functions.hpp"
@@ -24,13 +24,13 @@ const std::string currentDateTime() {
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::Show_info() {
+void CPGLayer<Dtype>::Show_info() {
   if (!is_show_) return;
   is_show_ = false;
 
   LOG(INFO) << "==============================================";
-  LOG(INFO) << "OPG layer:";
-  LOG(INFO) << "is_opg_: " << is_opg_;
+  LOG(INFO) << "CPG layer:";
+  LOG(INFO) << "is_cpg_: " << is_cpg_;
   LOG(INFO) << "ignore_label_: " << ignore_label_;
   LOG(INFO) << "debug_info_: " << debug_info_;
   LOG(INFO) << "is_contrast: " << is_contrast_;
@@ -40,9 +40,9 @@ void OPGLayer<Dtype>::Show_info() {
   LOG(INFO) << "end_layer_name_: " << end_layer_name_;
   LOG(INFO) << "end_layer_index_: " << end_layer_index_;
   LOG(INFO) << "predict_blob_index_: " << predict_blob_index_;
-  for (size_t i = 0; i < opg_blob_name_.size(); ++i) {
-    LOG(INFO) << "opg_blob_name_: " << opg_blob_name_[i];
-    LOG(INFO) << "opg_blob_index_: " << opg_blob_index_[i];
+  for (size_t i = 0; i < cpg_blob_name_.size(); ++i) {
+    LOG(INFO) << "cpg_blob_name_: " << cpg_blob_name_[i];
+    LOG(INFO) << "cpg_blob_index_: " << cpg_blob_index_[i];
   }
 
   const vector<string> layer_names_ = net_->layer_names();
@@ -60,9 +60,9 @@ void OPGLayer<Dtype>::Show_info() {
   LOG(INFO) << "==============================================";
 }
 
-// DEPRECATED. As OPG_back function will not change the diff of param now.
+// DEPRECATED. As CPG_back function will not change the diff of param now.
 template <typename Dtype>
-void OPGLayer<Dtype>::Save_param_diff() {
+void CPGLayer<Dtype>::Save_param_diff() {
   if (this->phase_ == TEST) return;
 
   //-----------------------------------------------------------------------
@@ -152,9 +152,9 @@ void OPGLayer<Dtype>::Save_param_diff() {
   is_history_init_ = true;
 }
 
-// DEPRECATED. As OPG_back function will not change the diff of param now.
+// DEPRECATED. As CPG_back function will not change the diff of param now.
 template <typename Dtype>
-void OPGLayer<Dtype>::Restore_param_diff() {
+void CPGLayer<Dtype>::Restore_param_diff() {
   if (this->phase_ == TEST) return;
 
   //-----------------------------------------------------------------------
@@ -225,17 +225,17 @@ void Show_blob(const Dtype *data, const int channels, const int height,
   Dtype scale_factor = 255.0 / threshold_value;
 
   //-----------------------------------------------------------------------
-  cv::Mat opg_mat;
-  cv::Mat opg_mat_jet;
+  cv::Mat cpg_mat;
+  cv::Mat cpg_mat_jet;
   if (channels == 3) {
-    opg_mat = cv::Mat(height, width, CV_8UC3);
+    cpg_mat = cv::Mat(height, width, CV_8UC3);
   } else if (channels == 1) {
-    opg_mat = cv::Mat(height, width, CV_8UC1);
+    cpg_mat = cv::Mat(height, width, CV_8UC1);
   } else {
     LOG(FATAL) << "channels should 1 or 3";
   }
 
-  uchar *opg_mat_data = opg_mat.data;
+  uchar *cpg_mat_data = cpg_mat.data;
   for (int c = 0; c < channels; c++) {
     for (int h = 0; h < height; h++) {
       for (int w = 0; w < width; w++) {
@@ -244,7 +244,7 @@ void Show_blob(const Dtype *data, const int channels, const int height,
         Dtype value = abs(data[index]);
         // Dtype value = data[index] > 0 ? data[index] : 0;
         if (value >= threshold_value) {
-          opg_mat_data[index_mat] = 255;
+          cpg_mat_data[index_mat] = 255;
           //-----------------------------------------------------------------------
           if (radioactive) {
             for (int cc = 0; cc < channels; cc++) {
@@ -253,7 +253,7 @@ void Show_blob(const Dtype *data, const int channels, const int height,
                 for (int ww = max(w - rec_size, 0);
                      ww < min(w + rec_size, width); ++ww) {
                   int index_mat_r = (hh * width + ww) * channels + cc;
-                  opg_mat_data[index_mat_r] = 255;
+                  cpg_mat_data[index_mat_r] = 255;
 
                   // int index_r = (cc * height + hh) * width + ww;
                   // Dtype value_r = abs(data[index_r]);
@@ -263,7 +263,7 @@ void Show_blob(const Dtype *data, const int channels, const int height,
                   // for (int www = min(w, ww); www <= max(w, ww); ++www) {
                   // int index_mat_r =
                   //(hhh * width + www) * channels + ccc;
-                  // opg_mat_data[index_mat_r] = 255;
+                  // cpg_mat_data[index_mat_r] = 255;
                   //}
                   //}
                   //}
@@ -275,29 +275,29 @@ void Show_blob(const Dtype *data, const int channels, const int height,
           //-----------------------------------------------------------------------
         } else {
           if (fill >= 0) {
-            opg_mat_data[index_mat] = fill;
+            cpg_mat_data[index_mat] = fill;
           } else {
-            opg_mat_data[index_mat] = scale_factor * value;
+            cpg_mat_data[index_mat] = scale_factor * value;
           }
         }
       }
     }
   }
 
-  cv::imwrite(save_path, opg_mat);
+  cv::imwrite(save_path, cpg_mat);
   LOG(INFO) << "radioactive: " << radioactive
             << " threshold_ratio: " << threshold_ratio
             << " threshold_value: " << threshold_value << " maxval: " << maxval
             << " mean: " << mean;
   LOG(INFO) << "save_path: " << save_path;
 
-  cv::applyColorMap(opg_mat, opg_mat_jet, cv::COLORMAP_JET);
-  cv::imwrite(save_path_jet, opg_mat_jet);
+  cv::applyColorMap(cpg_mat, cpg_mat_jet, cv::COLORMAP_JET);
+  cv::imwrite(save_path_jet, cpg_mat_jet);
 
   //-----------------------------------------------------------------------
 
   //-----------------------------------------------------------------------
-  // show the distubution of opg_blob data
+  // show the distubution of cpg_blob data
   // int total[26];
   // for (int i = 0; i < 26; ++i) {
   // total[i] = 0;
@@ -314,9 +314,9 @@ void Show_blob(const Dtype *data, const int channels, const int height,
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
+void CPGLayer<Dtype>::Show_cpg(const Dtype *cpg_data, const int current_label,
                                const string info) {
-  // 除了原始OPG外，高于阈值的像素点用255表示，低于阈值的像素点用0表示
+  // 除了原始CPG外，高于阈值的像素点用255表示，低于阈值的像素点用0表示
   LOG(INFO) << "label: " << current_label << " info: " << info;
   // string save_subdir = currentDateTime();
   stringstream save_dir;
@@ -327,14 +327,14 @@ void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
   stringstream save_path_jet;
   save_path << save_dir.str() << "_o" << info << ".png";
   save_path_jet << save_dir.str() << "_o" << info << "_jet.png";
-  Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+  Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
             save_path_jet.str(), 1, false, -1);
 
   save_path.str(std::string());
   save_path_jet.str(std::string());
   save_path << save_dir.str() << "_0" << info << ".png";
   save_path_jet << save_dir.str() << "_0" << info << "_jet.png";
-  Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+  Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
             save_path_jet.str(), 0, false);
 
   for (int t = 1; t < 4; ++t) {
@@ -342,7 +342,7 @@ void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
     save_path_jet.str(std::string());
     save_path << save_dir.str() << "_" << pow(10, -t) << info << ".png";
     save_path_jet << save_dir.str() << "_" << pow(10, -t) << info << "_jet.png";
-    Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+    Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
               save_path_jet.str(), pow(10, -t), false);
 
     save_path.str(std::string());
@@ -351,13 +351,13 @@ void OPGLayer<Dtype>::Show_opg(const Dtype *opg_data, const int current_label,
               << ".png";
     save_path_jet << save_dir.str() << "_" << pow(10, -t) << "_ra" << info
                   << "_jet.png";
-    Show_blob(opg_data, channels_opg_, height_im_, width_im_, save_path.str(),
+    Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
               save_path_jet.str(), pow(10, -t), true);
   }
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::BackwardDebugInfo(const int layer_id) {
+void CPGLayer<Dtype>::BackwardDebugInfo(const int layer_id) {
   const vector<vector<Blob<Dtype> *> > bottom_vecs_ = net_->bottom_vecs();
   const vector<string> blob_names_ = net_->blob_names();
   const vector<string> layer_names_ = net_->layer_names();
@@ -391,7 +391,7 @@ void OPGLayer<Dtype>::BackwardDebugInfo(const int layer_id) {
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::Clear_split_diff() {
+void CPGLayer<Dtype>::Clear_split_diff() {
   for (size_t i = 0; i < split_top_blob_.size(); ++i) {
     caffe_gpu_set(split_top_blob_[i]->count(), static_cast<Dtype>(0),
                   split_top_blob_[i]->mutable_gpu_diff());
@@ -399,7 +399,7 @@ void OPGLayer<Dtype>::Clear_split_diff() {
 }
 
 template <typename Dtype>
-bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
+bool CPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
                                        const Dtype predict) {
   if (cls_id == ignore_label_) return false;
   // assume label is betwween 0 ~ 1
@@ -425,7 +425,7 @@ bool OPGLayer<Dtype>::Need_Repartition(const int cls_id, const Dtype label,
 }
 
 template <typename Dtype>
-bool OPGLayer<Dtype>::Need_Order(const int cls_id, const Dtype label,
+bool CPGLayer<Dtype>::Need_Order(const int cls_id, const Dtype label,
                                  const Dtype predict) {
   if (cls_id == ignore_label_) return false;
   // assum score is betwween 0 ~ 1
@@ -446,7 +446,7 @@ bool OPGLayer<Dtype>::Need_Order(const int cls_id, const Dtype label,
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::OPG_back() {
+void CPGLayer<Dtype>::CPG_back() {
   const vector<shared_ptr<Layer<Dtype> > > layers_ = net_->layers();
   const vector<vector<Blob<Dtype> *> > top_vecs_ = net_->top_vecs();
   const vector<vector<Blob<Dtype> *> > bottom_vecs_ = net_->bottom_vecs();
@@ -528,9 +528,30 @@ __global__ void tanh_gpu(const int count, Dtype *const data) {
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
+void CPGLayer<Dtype>::After() {
+  pass_im_ += num_im_;
+
+  if (max_num_im_cpg_ > 0 && max_num_im_cpg_ <= pass_im_) {
+    is_cpg_ = false;
+  }
+
+  accum_im_ += num_im_;
+  accum_gt_ += gt_class_.size();
+  accum_bp_ += bp_class_.size();
+  if (pass_im_ % display_ == 0) {
+    LOG(INFO) << "is_cpg: " << is_cpg_ << " #im: " << accum_im_
+              << " #bp: " << accum_bp_ << " #gt: " << accum_gt_;
+    accum_im_ = 0;
+    accum_gt_ = 0;
+    accum_bp_ = 0;
+  }
+  save_id_ += num_im_;
+}
+
+template <typename Dtype>
+void CPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                   const vector<Blob<Dtype> *> &top) {
-  if (!is_opg_) {
+  if (!is_cpg_) {
     return;
   }
 
@@ -548,7 +569,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
 
   //-----------------------------------------------------------------------
   // clear split layer diff
-  // When OPG backward, the split layer will sum up the unrelate diff of other
+  // When CPG backward, the split layer will sum up the unrelate diff of other
   // stream, so set all diff in split layer to zero.
   Clear_split_diff();
 
@@ -601,10 +622,10 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     }
   }
 
-  // shape the blob to save opg_blob
-  raw_opg_->Reshape(bp_class_.size(), opg_blob_.size(), height_im_, width_im_);
-  caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_data());
-  caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_diff());
+  // shape the blob to save cpg_blob
+  raw_cpg_->Reshape(bp_class_.size(), cpg_blob_.size(), height_im_, width_im_);
+  caffe_gpu_set(raw_cpg_->count(), Dtype(0), raw_cpg_->mutable_gpu_data());
+  caffe_gpu_set(raw_cpg_->count(), Dtype(0), raw_cpg_->mutable_gpu_diff());
 
   //-----------------------------------------------------------------------
   // me back
@@ -641,16 +662,16 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       BlobProto cache_proto;
       Blob<Dtype> cache_blob;
       stringstream cache_path;
-      for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
+      for (size_t blob_id = 0; blob_id < cpg_blob_.size(); ++blob_id) {
         cache_path.str(string());
-        cache_path << "data/opg_cache_test/" << save_id_ << "_"
-                   << bp_class_[bp_id] << "_" << opg_blob_name_[blob_id];
+        cache_path << "data/cpg_cache_test/" << save_id_ << "_"
+                   << bp_class_[bp_id] << "_" << cpg_blob_name_[blob_id];
 
         if (boost::filesystem::exists(cache_path.str())) {
           ReadProtoFromBinaryFileOrDie(cache_path.str(), &cache_proto);
           cache_blob.FromProto(cache_proto, true);
-          caffe_copy(opg_blob_[blob_id]->count(), cache_blob.gpu_data(),
-                     opg_blob_[blob_id]->mutable_gpu_diff());
+          caffe_copy(cpg_blob_[blob_id]->count(), cache_blob.gpu_data(),
+                     cpg_blob_[blob_id]->mutable_gpu_diff());
         } else {
           is_back = true;
           break;
@@ -658,87 +679,87 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       }
 
       if (is_back) {
-        OPG_back();
+        CPG_back();
 
-        boost::filesystem::create_directories("data/opg_cache_test");
-        for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
+        boost::filesystem::create_directories("data/cpg_cache_test");
+        for (size_t blob_id = 0; blob_id < cpg_blob_.size(); ++blob_id) {
           cache_path.str(string());
-          cache_path << "data/opg_cache_test/" << save_id_ << "_"
-                     << bp_class_[bp_id] << "_" << opg_blob_name_[blob_id];
+          cache_path << "data/cpg_cache_test/" << save_id_ << "_"
+                     << bp_class_[bp_id] << "_" << cpg_blob_name_[blob_id];
 
-          cache_blob.ReshapeLike(*opg_blob_[blob_id]);
-          caffe_copy(opg_blob_[blob_id]->count(),
-                     opg_blob_[blob_id]->gpu_diff(),
+          cache_blob.ReshapeLike(*cpg_blob_[blob_id]);
+          caffe_copy(cpg_blob_[blob_id]->count(),
+                     cpg_blob_[blob_id]->gpu_diff(),
                      cache_blob.mutable_gpu_data());
           cache_blob.ToProto(&cache_proto, false);
           WriteProtoToBinaryFile(cache_proto, cache_path.str());
         }
       }
     } else {
-      OPG_back();
+      CPG_back();
     }
 
-    // maximum along channel and save to raw_opg_ diff
-    for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
-      const int channels_opg_this = opg_blob_[blob_id]->shape(1);
-      const int size_opg_this =
-          opg_blob_[blob_id]->shape(2) * opg_blob_[blob_id]->shape(3);
+    // maximum along channel and save to raw_cpg_ diff
+    for (size_t blob_id = 0; blob_id < cpg_blob_.size(); ++blob_id) {
+      const int channels_cpg_this = cpg_blob_[blob_id]->shape(1);
+      const int size_cpg_this =
+          cpg_blob_[blob_id]->shape(2) * cpg_blob_[blob_id]->shape(3);
 
-      caffe_gpu_abs(opg_blob_[blob_id]->count(), opg_blob_[blob_id]->gpu_diff(),
-                    opg_blob_[blob_id]->mutable_gpu_diff());
+      caffe_gpu_abs(cpg_blob_[blob_id]->count(), cpg_blob_[blob_id]->gpu_diff(),
+                    cpg_blob_[blob_id]->mutable_gpu_diff());
 
-      if (channels_opg_this == 1) {
-        caffe_copy(size_opg_this, opg_blob_[blob_id]->gpu_diff(),
-                   raw_opg_->mutable_gpu_diff() +
-                       raw_opg_->offset(bp_id, blob_id, 0, 0));
+      if (channels_cpg_this == 1) {
+        caffe_copy(size_cpg_this, cpg_blob_[blob_id]->gpu_diff(),
+                   raw_cpg_->mutable_gpu_diff() +
+                       raw_cpg_->offset(bp_id, blob_id, 0, 0));
       } else {
-        caffe_gpu_maximum(size_opg_this,
-                          opg_blob_[blob_id]->gpu_diff() + size_opg_this * 0,
-                          opg_blob_[blob_id]->gpu_diff() + size_opg_this * 1,
-                          raw_opg_->mutable_gpu_diff() +
-                              raw_opg_->offset(bp_id, blob_id, 0, 0));
+        caffe_gpu_maximum(size_cpg_this,
+                          cpg_blob_[blob_id]->gpu_diff() + size_cpg_this * 0,
+                          cpg_blob_[blob_id]->gpu_diff() + size_cpg_this * 1,
+                          raw_cpg_->mutable_gpu_diff() +
+                              raw_cpg_->offset(bp_id, blob_id, 0, 0));
 
-        for (int i = 2; i < channels_opg_this; ++i) {
+        for (int i = 2; i < channels_cpg_this; ++i) {
           caffe_gpu_maximum(
-              size_opg_this, opg_blob_[blob_id]->gpu_diff() + size_opg_this * i,
-              raw_opg_->gpu_diff() + raw_opg_->offset(bp_id, blob_id, 0, 0),
-              raw_opg_->mutable_gpu_diff() +
-                  raw_opg_->offset(bp_id, blob_id, 0, 0));
+              size_cpg_this, cpg_blob_[blob_id]->gpu_diff() + size_cpg_this * i,
+              raw_cpg_->gpu_diff() + raw_cpg_->offset(bp_id, blob_id, 0, 0),
+              raw_cpg_->mutable_gpu_diff() +
+                  raw_cpg_->offset(bp_id, blob_id, 0, 0));
         }
       }
     }
   }
 
   if (is_contrast_) {
-    caffe_copy(raw_opg_->count(), raw_opg_->gpu_diff(),
-               raw_opg_->mutable_gpu_data());
+    caffe_copy(raw_cpg_->count(), raw_cpg_->gpu_diff(),
+               raw_cpg_->mutable_gpu_data());
     for (size_t gt_id = 0; gt_id < gt_class_.size(); ++gt_id) {
       for (size_t bp_id = 0; bp_id < bp_class_.size(); ++bp_id) {
         if (gt_id == bp_id) continue;
-        for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
+        for (size_t blob_id = 0; blob_id < cpg_blob_.size(); ++blob_id) {
           const int channel_size =
-              opg_blob_[blob_id]->shape(2) * opg_blob_[blob_id]->shape(3);
+              cpg_blob_[blob_id]->shape(2) * cpg_blob_[blob_id]->shape(3);
 
           caffe_gpu_sub(
               channel_size,
-              raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-              raw_opg_->gpu_data() + raw_opg_->offset(bp_id, blob_id, 0, 0),
-              raw_opg_->mutable_gpu_diff() +
-                  raw_opg_->offset(bp_id, blob_id, 0, 0));
+              raw_cpg_->gpu_data() + raw_cpg_->offset(gt_id, blob_id, 0, 0),
+              raw_cpg_->gpu_data() + raw_cpg_->offset(bp_id, blob_id, 0, 0),
+              raw_cpg_->mutable_gpu_diff() +
+                  raw_cpg_->offset(bp_id, blob_id, 0, 0));
 
           // NOLINT_NEXT_LINE(whitespace/operators)
-          Do_threshold<Dtype> << <CAFFE_GET_BLOCKS(channel_size),
-                                  CAFFE_CUDA_NUM_THREADS>>>
-              (channel_size, raw_opg_->mutable_gpu_diff() +
-                                 raw_opg_->offset(bp_id, blob_id, 0, 0),
-               0, 0);
+          Do_threshold<Dtype><<<CAFFE_GET_BLOCKS(channel_size),
+                                CAFFE_CUDA_NUM_THREADS>>>(
+              channel_size, raw_cpg_->mutable_gpu_diff() +
+                                raw_cpg_->offset(bp_id, blob_id, 0, 0),
+              0, 0);
 
           caffe_gpu_add(
               channel_size,
-              raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-              raw_opg_->gpu_diff() + raw_opg_->offset(bp_id, blob_id, 0, 0),
-              raw_opg_->mutable_gpu_diff() +
-                  raw_opg_->offset(gt_id, blob_id, 0, 0));
+              raw_cpg_->gpu_diff() + raw_cpg_->offset(gt_id, blob_id, 0, 0),
+              raw_cpg_->gpu_diff() + raw_cpg_->offset(bp_id, blob_id, 0, 0),
+              raw_cpg_->mutable_gpu_diff() +
+                  raw_cpg_->offset(gt_id, blob_id, 0, 0));
         }
       }
     }
@@ -746,52 +767,52 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
 
   for (size_t gt_id = 0; gt_id < gt_class_.size(); ++gt_id) {
     int cls_id = gt_class_[gt_id];
-    if (opg_blob_.size() == 1 && opg_blob_[0]->shape(2) == height_im_ &&
-        opg_blob_[0]->shape(3) == width_im_) {
-      caffe_copy(size_opg_,
-                 raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, 0, 0, 0),
+    if (cpg_blob_.size() == 1 && cpg_blob_[0]->shape(2) == height_im_ &&
+        cpg_blob_[0]->shape(3) == width_im_) {
+      caffe_copy(size_cpg_,
+                 raw_cpg_->gpu_diff() + raw_cpg_->offset(gt_id, 0, 0, 0),
                  top[0]->mutable_gpu_data() + top[0]->offset(0, cls_id, 0, 0));
     } else {
       // resize to image size and average
-      // from opg_blob_ diff to data
-      for (size_t blob_id = 0; blob_id < opg_blob_.size(); ++blob_id) {
-        if (opg_blob_[blob_id]->shape(2) == height_im_ &&
-            opg_blob_[blob_id]->shape(3) == width_im_) {
-          caffe_copy(size_opg_, raw_opg_->gpu_diff() +
-                                    raw_opg_->offset(gt_id, blob_id, 0, 0),
-                     raw_opg_->mutable_gpu_data() +
-                         raw_opg_->offset(gt_id, blob_id, 0, 0));
+      // from cpg_blob_ diff to data
+      for (size_t blob_id = 0; blob_id < cpg_blob_.size(); ++blob_id) {
+        if (cpg_blob_[blob_id]->shape(2) == height_im_ &&
+            cpg_blob_[blob_id]->shape(3) == width_im_) {
+          caffe_copy(size_cpg_, raw_cpg_->gpu_diff() +
+                                    raw_cpg_->offset(gt_id, blob_id, 0, 0),
+                     raw_cpg_->mutable_gpu_data() +
+                         raw_cpg_->offset(gt_id, blob_id, 0, 0));
         } else {
           caffe_gpu_interp2<Dtype, false>(
-              1, raw_opg_->gpu_diff() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-              0, 0, opg_blob_[blob_id]->shape(2), opg_blob_[blob_id]->shape(3),
-              opg_blob_[blob_id]->shape(2), opg_blob_[blob_id]->shape(3),
-              raw_opg_->mutable_gpu_data() +
-                  raw_opg_->offset(gt_id, blob_id, 0, 0),
+              1, raw_cpg_->gpu_diff() + raw_cpg_->offset(gt_id, blob_id, 0, 0),
+              0, 0, cpg_blob_[blob_id]->shape(2), cpg_blob_[blob_id]->shape(3),
+              cpg_blob_[blob_id]->shape(2), cpg_blob_[blob_id]->shape(3),
+              raw_cpg_->mutable_gpu_data() +
+                  raw_cpg_->offset(gt_id, blob_id, 0, 0),
               0, 0, height_im_, width_im_, height_im_, width_im_);
         }
 
         int max_value_index;
-        caffe_gpu_amax(size_opg_, raw_opg_->gpu_data() +
-                                      raw_opg_->offset(gt_id, blob_id, 0, 0),
+        caffe_gpu_amax(size_cpg_, raw_cpg_->gpu_data() +
+                                      raw_cpg_->offset(gt_id, blob_id, 0, 0),
                        &max_value_index);
         max_value_index--;
         const Dtype maxval =
-            *(raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0) +
+            *(raw_cpg_->cpu_data() + raw_cpg_->offset(gt_id, blob_id, 0, 0) +
               max_value_index);
 
-        caffe_gpu_scal(size_opg_, Dtype(1.0 / maxval),
-                       raw_opg_->mutable_gpu_data() +
-                           raw_opg_->offset(gt_id, blob_id, 0, 0));
+        caffe_gpu_scal(size_cpg_, Dtype(1.0 / maxval),
+                       raw_cpg_->mutable_gpu_data() +
+                           raw_cpg_->offset(gt_id, blob_id, 0, 0));
 
         caffe_gpu_add(
-            size_opg_, top[0]->gpu_data() + top[0]->offset(0, cls_id, 0, 0),
-            raw_opg_->gpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
+            size_cpg_, top[0]->gpu_data() + top[0]->offset(0, cls_id, 0, 0),
+            raw_cpg_->gpu_data() + raw_cpg_->offset(gt_id, blob_id, 0, 0),
             top[0]->mutable_gpu_data() + top[0]->offset(0, cls_id, 0, 0));
         if (debug_info_) {
-          Show_opg(
-              raw_opg_->cpu_data() + raw_opg_->offset(gt_id, blob_id, 0, 0),
-              cls_id, "_" + opg_blob_name_[blob_id]);
+          Show_cpg(
+              raw_cpg_->cpu_data() + raw_cpg_->offset(gt_id, blob_id, 0, 0),
+              cls_id, "_" + cpg_blob_name_[blob_id]);
         }
       }
     }
@@ -801,17 +822,17 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
       const int top_offset = top[0]->height() * top[0]->width();
       // NOLINT_NEXT_LINE(whitespace/operators)
       for (int i = 0; i < top[0]->num() * top[0]->channels(); ++i) {
-        filter_kernel<Dtype> << <CAFFE_GET_BLOCKS(top_offset),
-                                 CAFFE_CUDA_NUM_THREADS>>>
-            (top_offset, top[0]->gpu_data() + i * top_offset, top[0]->height(),
-             top[0]->width(), top[0]->mutable_gpu_diff() + i * top_offset);
+        filter_kernel<
+            Dtype><<<CAFFE_GET_BLOCKS(top_offset), CAFFE_CUDA_NUM_THREADS>>>(
+            top_offset, top[0]->gpu_data() + i * top_offset, top[0]->height(),
+            top[0]->width(), top[0]->mutable_gpu_diff() + i * top_offset);
       }
       caffe_copy(top[0]->count(), top[0]->gpu_diff(),
                  top[0]->mutable_gpu_data());
     }
 
     if (debug_info_) {
-      Show_opg(top[0]->cpu_data() + top[0]->offset(0, cls_id, 0, 0), cls_id,
+      Show_cpg(top[0]->cpu_data() + top[0]->offset(0, cls_id, 0, 0), cls_id,
                "_fusion");
     }
 
@@ -827,7 +848,7 @@ void OPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
 }
 
 template <typename Dtype>
-void OPGLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype> *> &top,
+void CPGLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype> *> &top,
                                    const vector<bool> &propagate_down,
                                    const vector<Blob<Dtype> *> &bottom) {
   for (size_t i = 0; i < bottom.size(); i++) {
@@ -838,6 +859,6 @@ void OPGLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype> *> &top,
   }
 }
 
-INSTANTIATE_LAYER_GPU_FUNCS(OPGLayer);
+INSTANTIATE_LAYER_GPU_FUNCS(CPGLayer);
 
 }  // namespace caffe

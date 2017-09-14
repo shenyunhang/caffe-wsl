@@ -61,10 +61,10 @@ void MILLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // LayerParameter mil_param(this->layer_param_);
 
   // TODO(YH): we can directly create new layers without using registry
-  // mil_param.set_type("OPG");
+  // mil_param.set_type("CPG");
   // cpg_layer_ = LayerRegistry<Dtype>::CreateLayer(mil_param);
-  // shared_ptr<OPGLayer<Dtype> > cpg_layer__ =
-  // boost::dynamic_pointer_cast<OPGLayer<Dtype> >(cpg_layer_);
+  // shared_ptr<CPGLayer<Dtype> > cpg_layer__ =
+  // boost::dynamic_pointer_cast<CPGLayer<Dtype> >(cpg_layer_);
   // cpg_layer__->Set_Net(net_);
   cpg_layer_->Set_Net(net_);
   cpg_bottom_vec_.clear();

@@ -1,6 +1,6 @@
-#include <vector>
 #include <stdlib.h> /* srand, rand */
 #include <boost/filesystem.hpp>
+#include <vector>
 
 #include "caffe/filler.hpp"
 #include "caffe/layers/repartition_layer.hpp"
@@ -13,7 +13,6 @@ namespace caffe {
 
 template <typename Dtype>
 cv::Scalar gray2jet(Dtype f) {
-
   /*plot short rainbow RGB*/
   Dtype a = f / 0.25;            // invert and group
   int X = floor(a);              // this is the integer part
@@ -267,7 +266,7 @@ void Show_rois(const Dtype *rois, const Dtype *scores, const Dtype *label,
 
 template <typename Dtype>
 void Show_blob(const Dtype *data, const int channels, const int height,
-               const int width, const string save_opg_path,
+               const int width, const string save_cpg_path,
                const float threshold_, const int fill = 0) {
   Dtype maxval = -FLT_MAX;
   Dtype sum = 0;
@@ -294,17 +293,17 @@ void Show_blob(const Dtype *data, const int channels, const int height,
   Dtype scale_factor = 255.0 / maxval;
 
   //-----------------------------------------------------------------------
-  cv::Mat opg_mat;
+  cv::Mat cpg_mat;
   if (channels == 3) {
-    opg_mat = cv::Mat(height, width, CV_8UC3);
+    cpg_mat = cv::Mat(height, width, CV_8UC3);
   } else if (channels == 1) {
-    opg_mat = cv::Mat(height, width, CV_8UC1);
+    cpg_mat = cv::Mat(height, width, CV_8UC1);
   } else {
     LOG(FATAL) << "channels should 1 or 3";
   }
 
   sum = 0;
-  uchar *opg_mat_data = opg_mat.data;
+  uchar *cpg_mat_data = cpg_mat.data;
   for (int c = 0; c < channels; c++) {
     for (int h = 0; h < height; h++) {
       for (int w = 0; w < width; w++) {
@@ -313,13 +312,13 @@ void Show_blob(const Dtype *data, const int channels, const int height,
         /*Dtype value = abs(data[index]);*/
         Dtype value = data[index] > 0 ? data[index] : 0;
         if (value > maxval) {
-          opg_mat_data[index_mat] = 255;
+          cpg_mat_data[index_mat] = 255;
           sum += maxval;
         } else {
           if (fill >= 0) {
-            opg_mat_data[index_mat] = fill;
+            cpg_mat_data[index_mat] = fill;
           } else {
-            opg_mat_data[index_mat] = scale_factor * value;
+            cpg_mat_data[index_mat] = scale_factor * value;
           }
           sum += value;
         }
@@ -330,16 +329,16 @@ void Show_blob(const Dtype *data, const int channels, const int height,
   LOG(INFO) << "max_value: " << maxval
             << " mean: " << sum / channels / height / width;
 
-  cv::imwrite(save_opg_path, opg_mat);
+  cv::imwrite(save_cpg_path, cpg_mat);
 
   //-----------------------------------------------------------------------
-  /*const Dtype* opg_cpu=opg_blob->cpu_data();*/
+  /*const Dtype* cpg_cpu=cpg_blob->cpu_data();*/
   /*int total[26];*/
   /*for(int i=0;i<26;++i){*/
   /*total[i]=0;*/
   /*}*/
-  /*for(int e=0;e<opg_blob->count();e++){*/
-  /*int level=int(opg_cpu[e]/10);*/
+  /*for(int e=0;e<cpg_blob->count();e++){*/
+  /*int level=int(cpg_cpu[e]/10);*/
   /*total[level]++;*/
   /*}*/
   /*for(int i=0;i<26;++i){*/
@@ -392,10 +391,10 @@ void RepartitionLayer<Dtype>::Score_map_crf() {
   shared_ptr<Blob<Dtype> > feature_blob = conv5_blob;
 
   //-----------------------------------------------------------------------
-  vector<int> crf_opg_shape = raw_data_->shape();
-  crf_opg_shape[1] = 2;
-  crf_opg_->Reshape(crf_opg_shape);
-  caffe_set(crf_opg_->count(), Dtype(0), crf_opg_->mutable_cpu_data());
+  vector<int> crf_cpg_shape = raw_data_->shape();
+  crf_cpg_shape[1] = 2;
+  crf_cpg_->Reshape(crf_cpg_shape);
+  caffe_set(crf_cpg_->count(), Dtype(0), crf_cpg_->mutable_cpu_data());
 
   Blob<Dtype> fusion_blob;
   vector<int> fusion_shape = feature_blob->shape();
@@ -406,25 +405,25 @@ void RepartitionLayer<Dtype>::Score_map_crf() {
   const int a_offset = fusion_blob.offset(0, 1, 0, 0);
   for (int c = 0; c < feature_blob->channels(); ++c) {
     /*caffe_abs(a_offset, feature_blob->cpu_data() + c * a_offset,
-     * crf_opg_->mutable_cpu_diff());*/
-    /*caffe_add(a_offset, crf_opg_->cpu_diff(), crf_opg_->cpu_data(),
-     * crf_opg_->mutable_cpu_data());*/
+     * crf_cpg_->mutable_cpu_diff());*/
+    /*caffe_add(a_offset, crf_cpg_->cpu_diff(), crf_cpg_->cpu_data(),
+     * crf_cpg_->mutable_cpu_data());*/
     caffe_add(a_offset, feature_blob->cpu_data() + c * a_offset,
               fusion_blob.cpu_data(), fusion_blob.mutable_cpu_data());
   }
 
   caffe_cpu_interp2<Dtype, false>(
       1, fusion_blob.cpu_data(), 0, 0, fusion_shape[2], fusion_shape[3],
-      fusion_shape[2], fusion_shape[3], crf_opg_->mutable_cpu_data(), 0, 0,
-      crf_opg_shape[2], crf_opg_shape[3], crf_opg_shape[2], crf_opg_shape[3]);
+      fusion_shape[2], fusion_shape[3], crf_cpg_->mutable_cpu_data(), 0, 0,
+      crf_cpg_shape[2], crf_cpg_shape[3], crf_cpg_shape[2], crf_cpg_shape[3]);
 
-  const Dtype max_value = max_element_(crf_opg_->cpu_data(), crf_opg_->count());
+  const Dtype max_value = max_element_(crf_cpg_->cpu_data(), crf_cpg_->count());
   const Dtype scale_factor = 1 / (max_value);
-  crf_opg_->scale_data(scale_factor);
-  Dtype *crf_opg = crf_opg_->mutable_cpu_data();
-  for (int i = 0; i < crf_opg_->count(); ++i) {
-    if (crf_opg[i] < 0.0) {
-      crf_opg[i] = 0;
+  crf_cpg_->scale_data(scale_factor);
+  Dtype *crf_cpg = crf_cpg_->mutable_cpu_data();
+  for (int i = 0; i < crf_cpg_->count(); ++i) {
+    if (crf_cpg[i] < 0.0) {
+      crf_cpg[i] = 0;
     }
   }
 
@@ -443,13 +442,13 @@ void RepartitionLayer<Dtype>::Score_map_crf() {
   stringstream save_path;
   save_path << "tmp/" << pass_im_ << "_feat.png";
   /*Show_blob(crf_output, false, n, rows, cols, channels,
-   * save_crf_opg_path.str());*/
+   * save_crf_cpg_path.str());*/
   Show_blob(crf_output_->cpu_data(), 1, crf_output_->height(),
             crf_output_->width(), save_path.str(), 1);
 
   stringstream save_fusion_path;
   save_fusion_path << "tmp/" << pass_im_ << "_fusion.png";
-  Show_blob(crf_opg_->cpu_data(), 1, crf_opg_->height(), crf_opg_->width(),
+  Show_blob(crf_cpg_->cpu_data(), 1, crf_cpg_->height(), crf_cpg_->width(),
             save_fusion_path.str(), 1);
 }
 
@@ -464,42 +463,42 @@ void RepartitionLayer<Dtype>::Repartition_crf(const int label) {
   caffe_copy(crf_data_->count(), im_blob->cpu_data(),
              crf_data_->mutable_cpu_data());
 
-  vector<int> opg_shape = im_blob->shape();
-  opg_shape[1] = 2;
-  crf_opg_->Reshape(opg_shape);
+  vector<int> cpg_shape = im_blob->shape();
+  cpg_shape[1] = 2;
+  crf_cpg_->Reshape(cpg_shape);
 
-  /*caffe_copy(crf_opg_->count(), im_blob->cpu_diff(),*/
-  /*crf_opg_->mutable_cpu_data());*/
+  /*caffe_copy(crf_cpg_->count(), im_blob->cpu_diff(),*/
+  /*crf_cpg_->mutable_cpu_data());*/
 
-  const int a_offset = crf_opg_->offset(0, 1, 0, 0);
-  caffe_abs(a_offset, im_blob->cpu_diff(), crf_opg_->mutable_cpu_data());
+  const int a_offset = crf_cpg_->offset(0, 1, 0, 0);
+  caffe_abs(a_offset, im_blob->cpu_diff(), crf_cpg_->mutable_cpu_data());
   caffe_abs(a_offset, im_blob->cpu_diff() + 1 * a_offset,
-            crf_opg_->mutable_cpu_diff());
-  caffe_add(a_offset, crf_opg_->cpu_diff(), crf_opg_->cpu_data(),
-            crf_opg_->mutable_cpu_data());
+            crf_cpg_->mutable_cpu_diff());
+  caffe_add(a_offset, crf_cpg_->cpu_diff(), crf_cpg_->cpu_data(),
+            crf_cpg_->mutable_cpu_data());
   caffe_abs(a_offset, im_blob->cpu_diff() + 2 * a_offset,
-            crf_opg_->mutable_cpu_diff());
-  caffe_add(a_offset, crf_opg_->cpu_diff(), crf_opg_->cpu_data(),
-            crf_opg_->mutable_cpu_data());
+            crf_cpg_->mutable_cpu_diff());
+  caffe_add(a_offset, crf_cpg_->cpu_diff(), crf_cpg_->cpu_data(),
+            crf_cpg_->mutable_cpu_data());
 
   const Dtype *max_value = std::max_element(
-      crf_opg_->cpu_data(), crf_opg_->cpu_data() + crf_opg_->count());
+      crf_cpg_->cpu_data(), crf_cpg_->cpu_data() + crf_cpg_->count());
 
   if (debug_info_) {
     LOG(INFO) << "Repartition_crf max_value: " << *max_value;
   }
   const Dtype scale_factor = 1 / (*max_value);
-  crf_opg_->scale_data(scale_factor);
-  Dtype *crf_opg = crf_opg_->mutable_cpu_data();
-  for (int i = 0; i < crf_opg_->count(); ++i) {
-    if (crf_opg[i] < crf_threshold_) {
-      crf_opg[i] = 0;
+  crf_cpg_->scale_data(scale_factor);
+  Dtype *crf_cpg = crf_cpg_->mutable_cpu_data();
+  for (int i = 0; i < crf_cpg_->count(); ++i) {
+    if (crf_cpg[i] < crf_threshold_) {
+      crf_cpg[i] = 0;
     }
   }
 
-  /*caffe_cpu_axpby(a_offset, Dtype(-1), crf_opg_->cpu_data(), Dtype(0),
-   * crf_opg_->mutable_cpu_data() + a_offset);*/
-  /*caffe_add_scalar(a_offset, Dtype(1), crf_opg_->mutable_cpu_data() +
+  /*caffe_cpu_axpby(a_offset, Dtype(-1), crf_cpg_->cpu_data(), Dtype(0),
+   * crf_cpg_->mutable_cpu_data() + a_offset);*/
+  /*caffe_add_scalar(a_offset, Dtype(1), crf_cpg_->mutable_cpu_data() +
    * a_offset);*/
 
   crf_data_dim_->Reshape(1, 2, 1, 1);
@@ -508,13 +507,13 @@ void RepartitionLayer<Dtype>::Repartition_crf(const int label) {
 
   crf_layer_->Forward(crf_bottom_vec_, crf_top_vec_);
 
-  stringstream save_crf_opg_path;
-  save_crf_opg_path << "tmp/" << pass_im_ << "_" << voc_label_[label]
+  stringstream save_crf_cpg_path;
+  save_crf_cpg_path << "tmp/" << pass_im_ << "_" << voc_label_[label]
                     << "_crf.png";
   /*Show_blob(crf_output, false, n, rows, cols, channels,
-   * save_crf_opg_path.str());*/
+   * save_crf_cpg_path.str());*/
   Show_blob(crf_output_->cpu_data(), 1, crf_output_->height(),
-            crf_output_->width(), save_crf_opg_path.str(), 1);
+            crf_output_->width(), save_crf_cpg_path.str(), 1);
 }
 
 template <typename Dtype>
@@ -534,7 +533,6 @@ __global__ void InitFilter_Test(const int count, const Dtype *const label_data,
 template <typename Dtype>
 void RepartitionLayer<Dtype>::InitFilter(const Dtype *const label_gpu_data,
                                          Dtype *const filter_gpu_data) {
-
   switch (this->layer_param_.cpg_param().mode()) {
     case CPGParameter_Mode_PRED:
     case CPGParameter_Mode_CPG_POOLING:
@@ -542,10 +540,9 @@ void RepartitionLayer<Dtype>::InitFilter(const Dtype *const label_gpu_data,
         caffe_gpu_set(num_roi_ * num_class_, Dtype(1), filter_gpu_data);
       } else {
         // NOLINT_NEXT_LINE(whitespace/operators)
-        InitFilter_Test<Dtype> << <CAFFE_GET_BLOCKS(num_roi_ * num_class_),
-                                   CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_ * num_class_, label_gpu_data, num_class_,
-             filter_gpu_data);
+        InitFilter_Test<Dtype><<<CAFFE_GET_BLOCKS(num_roi_ * num_class_),
+                                 CAFFE_CUDA_NUM_THREADS>>>(
+            num_roi_ * num_class_, label_gpu_data, num_class_, filter_gpu_data);
       }
       break;
     case CPGParameter_Mode_CRF:
@@ -556,7 +553,7 @@ void RepartitionLayer<Dtype>::InitFilter(const Dtype *const label_gpu_data,
 }
 
 template <typename Dtype>
-__global__ void ScoreBBoxes(const int num_roi, const Dtype *const opg_data,
+__global__ void ScoreBBoxes(const int num_roi, const Dtype *const cpg_data,
                             const int num, const int channels, const int height,
                             const int width, const Dtype *const rois_data,
                             const int num_class, const int label,
@@ -576,7 +573,7 @@ __global__ void ScoreBBoxes(const int num_roi, const Dtype *const opg_data,
     /*Dtype maxval = -FLT_MAX;*/
     Dtype mass = 0;
     for (int c = 0; c < channels; ++c) {
-      const Dtype *gradient = opg_data + c * height * width;
+      const Dtype *gradient = cpg_data + c * height * width;
       for (int h = hstart; h < hend; ++h) {
         for (int w = wstart; w < wend; ++w) {
           /*sum += gradient[h * width + w];*/
@@ -597,7 +594,7 @@ __global__ void ScoreBBoxes(const int num_roi, const Dtype *const opg_data,
 }
 
 template <typename Dtype>
-__global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
+__global__ void CPGPooling(const int num_roi, const Dtype *cpg_data,
                            const int height_im, const int width_im,
                            const Dtype *rois_data, const int num_class,
                            const int cls_id, const Dtype min_density,
@@ -655,37 +652,37 @@ __global__ void CPGPooling(const int num_roi, const Dtype *opg_data,
     Dtype a1, a2, a3, a4;
 
     // CPG sum of RoI
-    a1 = opg_data[hend * width_im + wend];
-    a2 = (wstart - 1 >= 0) ? opg_data[hend * width_im + (wstart - 1)] : 0;
-    a3 = (hstart - 1 >= 0) ? opg_data[(hstart - 1) * width_im + wend] : 0;
+    a1 = cpg_data[hend * width_im + wend];
+    a2 = (wstart - 1 >= 0) ? cpg_data[hend * width_im + (wstart - 1)] : 0;
+    a3 = (hstart - 1 >= 0) ? cpg_data[(hstart - 1) * width_im + wend] : 0;
     a4 = (hstart - 1 >= 0 && wstart - 1 >= 0)
-             ? opg_data[(hstart - 1) * width_im + (wstart - 1)]
+             ? cpg_data[(hstart - 1) * width_im + (wstart - 1)]
              : 0;
     Dtype sum_roi = a1 - a2 - a3 + a4;
 
     // CPG sum of inner RoI
-    a1 = opg_data[hend_inner * width_im + wend_inner];
+    a1 = cpg_data[hend_inner * width_im + wend_inner];
     a2 = (wstart_inner - 1 >= 0)
-             ? opg_data[hend_inner * width_im + (wstart_inner - 1)]
+             ? cpg_data[hend_inner * width_im + (wstart_inner - 1)]
              : 0;
     a3 = (hstart_inner - 1 >= 0)
-             ? opg_data[(hstart_inner - 1) * width_im + wend_inner]
+             ? cpg_data[(hstart_inner - 1) * width_im + wend_inner]
              : 0;
     a4 = (hstart_inner - 1 >= 0 && wstart_inner - 1 >= 0)
-             ? opg_data[(hstart_inner - 1) * width_im + (wstart_inner - 1)]
+             ? cpg_data[(hstart_inner - 1) * width_im + (wstart_inner - 1)]
              : 0;
     Dtype sum_inner = a1 - a2 - a3 + a4;
 
     // CPG sum of outer RoI
-    a1 = opg_data[hend_outer * width_im + wend_outer];
+    a1 = cpg_data[hend_outer * width_im + wend_outer];
     a2 = (wstart_outer - 1 >= 0)
-             ? opg_data[hend_outer * width_im + (wstart_outer - 1)]
+             ? cpg_data[hend_outer * width_im + (wstart_outer - 1)]
              : 0;
     a3 = (hstart_outer - 1 >= 0)
-             ? opg_data[(hstart_outer - 1) * width_im + wend_outer]
+             ? cpg_data[(hstart_outer - 1) * width_im + wend_outer]
              : 0;
     a4 = (hstart_outer - 1 >= 0 && wstart_outer - 1 >= 0)
-             ? opg_data[(hstart_outer - 1) * width_im + (wstart_outer - 1)]
+             ? cpg_data[(hstart_outer - 1) * width_im + (wstart_outer - 1)]
              : 0;
     Dtype sum_outer = a1 - a2 - a3 + a4;
 
@@ -785,6 +782,14 @@ void RepartitionLayer<Dtype>::After() {
   // as Reshape function will be call before start
   pass_im_ += num_im_;
 
+  if (max_num_im_cpg_ > 0 && max_num_im_cpg_ <= pass_im_) {
+    is_cpg_ = false;
+  }
+
+  if (pass_im_ % display_ == 0) {
+    LOG(INFO) << "is_cpg: " << is_cpg_;
+  }
+
   if (pass_im_ % display_ == 0 && this->phase_ != TEST) {
     if (is_order_) {
       order_threshold_ =
@@ -799,7 +804,7 @@ void RepartitionLayer<Dtype>::After() {
 template <typename Dtype>
 void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                           const vector<Blob<Dtype> *> &top) {
-  if (!is_opg_) {
+  if (!is_cpg_) {
     return;
   }
 
@@ -838,9 +843,9 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                       raw_data_->mutable_gpu_data());
         caffe_gpu_set(raw_data_->count(), Dtype(0),
                       raw_data_->mutable_gpu_diff());
-        caffe_gpu_abs(size_opg_,
-                      bottom[bottom_index_["opg"]]->gpu_data() +
-                          bottom[bottom_index_["opg"]]->offset(0, cls_id, 0, 0),
+        caffe_gpu_abs(size_cpg_,
+                      bottom[bottom_index_["cpg"]]->gpu_data() +
+                          bottom[bottom_index_["cpg"]]->offset(0, cls_id, 0, 0),
                       raw_data_->mutable_gpu_data());
 
         // TODO(YH): order_threshold_
@@ -874,65 +879,63 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     switch (this->layer_param_.cpg_param().mode()) {
       case CPGParameter_Mode_PRED: {
         const Dtype maxval =
-            caffe_cpu_max_element(size_opg_, raw_data_->cpu_data());
+            caffe_cpu_max_element(size_cpg_, raw_data_->cpu_data());
         const Dtype threshold = maxval * fg_threshold_;
 
         // NOLINT_NEXT_LINE(whitespace/operators)
-        get_above_mask<Dtype> << <CAFFE_GET_BLOCKS(size_opg_),
-                                  CAFFE_CUDA_NUM_THREADS>>>
-            (size_opg_, raw_data_->gpu_data(), raw_data_->mutable_gpu_diff(),
-             threshold);
+        get_above_mask<
+            Dtype><<<CAFFE_GET_BLOCKS(size_cpg_), CAFFE_CUDA_NUM_THREADS>>>(
+            size_cpg_, raw_data_->gpu_data(), raw_data_->mutable_gpu_diff(),
+            threshold);
         Dtype im_mass;
-        caffe_gpu_asum(size_opg_, raw_data_->gpu_diff(), &im_mass);
+        caffe_gpu_asum(size_cpg_, raw_data_->gpu_diff(), &im_mass);
         const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
 
-        LOG_IF(INFO, debug_info_) << "maxval: " << maxval
-                                  << " threshold: " << threshold
-                                  << " im_mass: " << im_mass
-                                  << " im_density: " << im_density;
+        LOG_IF(INFO, debug_info_)
+            << "maxval: " << maxval << " threshold: " << threshold
+            << " im_mass: " << im_mass << " im_density: " << im_density;
         LOG_IF(INFO, debug_info_) << "ScoreBBoxes:";
         const Dtype min_density = im_density * density_threshold_;
         // NOLINT_NEXT_LINE(whitespace/operators)
-        ScoreBBoxes<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
-                               CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
-             bottom[bottom_index_["rois"]]->gpu_data(), num_class_, cls_id,
-             threshold, min_density, im_mass, filter_.mutable_gpu_data());
+        ScoreBBoxes<
+            Dtype><<<CAFFE_GET_BLOCKS(num_roi_), CAFFE_CUDA_NUM_THREADS>>>(
+            num_roi_, raw_data_->gpu_data(), 1, 1, height_im_, width_im_,
+            bottom[bottom_index_["rois"]]->gpu_data(), num_class_, cls_id,
+            threshold, min_density, im_mass, filter_.mutable_gpu_data());
       } break;
       case CPGParameter_Mode_CPG_POOLING: {
         int max_value_index;
-        caffe_gpu_amax(size_opg_, raw_data_->gpu_data(), &max_value_index);
+        caffe_gpu_amax(size_cpg_, raw_data_->gpu_data(), &max_value_index);
         max_value_index--;
         const Dtype maxval = raw_data_->cpu_data()[max_value_index];
         const Dtype threshold = maxval * fg_threshold_;
 
-        caffe_gpu_binary(size_opg_, raw_data_->gpu_data(),
+        caffe_gpu_binary(size_cpg_, raw_data_->gpu_data(),
                          raw_data_->mutable_gpu_diff(), threshold);
 
         Dtype im_mass;
-        caffe_gpu_asum(size_opg_, raw_data_->gpu_diff(), &im_mass);
+        caffe_gpu_asum(size_cpg_, raw_data_->gpu_diff(), &im_mass);
         const Dtype im_density = 1.0 * im_mass / height_im_ / width_im_;
 
         // CHECK_GE(maxval, 0) << "maxval should be greater than 0.";
-        LOG_IF(INFO, debug_info_) << "maxval: " << maxval
-                                  << " threshold: " << threshold
-                                  << " im_mass: " << im_mass
-                                  << " im_density: " << im_density;
+        LOG_IF(INFO, debug_info_)
+            << "maxval: " << maxval << " threshold: " << threshold
+            << " im_mass: " << im_mass << " im_density: " << im_density;
         LOG_IF(INFO, debug_info_) << "SumBBoxes:";
 
         integral_cpu(raw_data_->cpu_diff(), raw_data_->mutable_cpu_data(),
                      height_im_, width_im_);
 
-        CHECK_EQ(raw_data_->cpu_data()[size_opg_ - 1], im_mass)
+        CHECK_EQ(raw_data_->cpu_data()[size_cpg_ - 1], im_mass)
             << "Should be equal.";
 
         // NOLINT_NEXT_LINE(whitespace/operators)
-        CPGPooling<Dtype> << <CAFFE_GET_BLOCKS(num_roi_),
-                              CAFFE_CUDA_NUM_THREADS>>>
-            (num_roi_, raw_data_->gpu_data(), height_im_, width_im_,
-             bottom[bottom_index_["rois"]]->gpu_data(), num_class_, cls_id,
-             im_density * density_threshold_, im_mass * mass_threshold_,
-             filter_.mutable_gpu_data());
+        CPGPooling<
+            Dtype><<<CAFFE_GET_BLOCKS(num_roi_), CAFFE_CUDA_NUM_THREADS>>>(
+            num_roi_, raw_data_->gpu_data(), height_im_, width_im_,
+            bottom[bottom_index_["rois"]]->gpu_data(), num_class_, cls_id,
+            im_density * density_threshold_, im_mass * mass_threshold_,
+            filter_.mutable_gpu_data());
 
         Dtype re_predict = 0;
 
@@ -1068,7 +1071,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
           BlobProto save_blob;
           top[0]->ToProto(&save_blob, false);
           stringstream save_path;
-          save_path << "data/opg_cache/" << save_id;
+          save_path << "data/cpg_cache/" << save_id;
           WriteProtoToBinaryFile(save_blob, save_path.str());
         }
 
@@ -1086,7 +1089,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
           BlobProto save_blob;
           top[0]->ToProto(&save_blob, false);
           stringstream save_path;
-          save_path << "data/opg_cache/" << save_id;
+          save_path << "data/cpg_cache/" << save_id;
           WriteProtoToBinaryFile(save_blob, save_path.str());
 
           LOG_IF(INFO, debug_info_) << "save_id: " << save_id

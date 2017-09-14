@@ -8,7 +8,7 @@
 #include "caffe/net.hpp"
 #include "caffe/proto/caffe.pb.h"
 
-#include "caffe/layers/opg_layer.hpp"
+#include "caffe/layers/cpg_layer.hpp"
 #include "caffe/layers/repartition_layer.hpp"
 
 namespace caffe {
@@ -18,7 +18,7 @@ class MILLayer : public Layer<Dtype> {
  public:
   explicit MILLayer(const LayerParameter& param)
       : Layer<Dtype>(param),
-        cpg_layer_(new OPGLayer<Dtype>(param)),
+        cpg_layer_(new CPGLayer<Dtype>(param)),
         repartition_layer_(new RepartitionLayer<Dtype>(param)) {}
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                           const vector<Blob<Dtype>*>& top);
@@ -55,7 +55,7 @@ class MILLayer : public Layer<Dtype> {
   map<string, int> bottom_index_;
   map<string, int> top_index_;
 
-  shared_ptr<OPGLayer<Dtype> > cpg_layer_;
+  shared_ptr<CPGLayer<Dtype> > cpg_layer_;
   vector<Blob<Dtype>*> cpg_bottom_vec_;
   vector<Blob<Dtype>*> cpg_top_vec_;
 
