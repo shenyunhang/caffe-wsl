@@ -10,18 +10,17 @@
 namespace caffe {
 
 template <typename Dtype>
-class GeneralPoolingLayer : public Layer<Dtype> {
+class RoIScorePoolingLayer : public Layer<Dtype> {
  public:
-  explicit GeneralPoolingLayer(const LayerParameter& param)
+  explicit RoIScorePoolingLayer(const LayerParameter& param)
       : Layer<Dtype>(param) {}
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                           const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
                        const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "GeneralPooling"; }
-  virtual inline int MaxBottomBlobs() const { return 2; }
-  virtual inline int MinBottomBlobs() const { return 1; }
+  virtual inline const char* type() const { return "RoIScorePooling"; }
+  virtual inline int ExactBottomBlobs() const { return 2; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 
  protected:
@@ -43,8 +42,14 @@ class GeneralPoolingLayer : public Layer<Dtype> {
   int channels_;
   int dim_;
 
-  // TODO(YH): Not all pooling modes  support axis parameter.
-  int pooling_axis_;
+  int num_roi_;
+  int num_class_;
+  int num_img_;
+  std::vector<Dtype> num_img_roi_vec_;
+
+
+      // TODO(YH): Not all pooling modes support axis parameter.
+      int pooling_axis_;
 };
 
 }  // namespace caffe
