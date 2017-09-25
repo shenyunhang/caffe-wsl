@@ -39,11 +39,12 @@ void CPGLayer<Dtype>::Show_info() {
   LOG(INFO) << "start_layer_index_: " << start_layer_index_;
   LOG(INFO) << "end_layer_name_: " << end_layer_name_;
   LOG(INFO) << "end_layer_index_: " << end_layer_index_;
-  LOG(INFO) << "predict_blob_index_: " << predict_blob_index_;
   for (size_t i = 0; i < cpg_blob_name_.size(); ++i) {
     LOG(INFO) << "cpg_blob_name_: " << cpg_blob_name_[i];
     LOG(INFO) << "cpg_blob_index_: " << cpg_blob_index_[i];
   }
+  LOG(INFO) << "predict_blob_name_: " << predict_blob_name_;
+  LOG(INFO) << "predict_blob_index_: " << predict_blob_index_;
 
   const vector<string> layer_names_ = net_->layer_names();
   LOG(INFO) << "----------------------------------------------";
@@ -314,6 +315,47 @@ void Show_blob(const Dtype *data, const int channels, const int height,
 }
 
 template <typename Dtype>
+void CPGLayer<Dtype>::Show_im(const Dtype *im_data, const int current_label) {
+  LOG(INFO) << "label: " << current_label;
+  stringstream save_dir;
+  save_dir << "tmp/" << voc_label_[current_label] << "/" << save_id_ << "/";
+  boost::filesystem::create_directories(save_dir.str());
+
+  stringstream save_path;
+  save_path << save_dir.str() << "img.png";
+
+  int channels= channels_cpg_;
+  int height= height_im_;
+  int width= width_im_;
+
+  cv::Mat cpg_mat;
+  if (channels == 3) {
+    cpg_mat = cv::Mat(height, width, CV_8UC3);
+  } else if (channels == 1) {
+    cpg_mat = cv::Mat(height, width, CV_8UC1);
+  } else {
+    LOG(FATAL) << "channels should 1 or 3";
+  }
+
+  uchar *cpg_mat_data = cpg_mat.data;
+  for (int c = 0; c < channels; c++) {
+    for (int h = 0; h < height; h++) {
+      for (int w = 0; w < width; w++) {
+        int index = (c * height + h) * width + w;
+        int index_mat = (h * width + w) * channels + c;
+        Dtype value = im_data[index]+255.0/2.0;
+
+          cpg_mat_data[index_mat] = value;
+
+      }
+    }
+  }
+
+  cv::imwrite(save_path.str(), cpg_mat);
+  LOG(INFO) << "save_path: " << save_path.str();
+}
+
+template <typename Dtype>
 void CPGLayer<Dtype>::Show_cpg(const Dtype *cpg_data, const int current_label,
                                const string info) {
   // 除了原始CPG外，高于阈值的像素点用255表示，低于阈值的像素点用0表示
@@ -326,14 +368,14 @@ void CPGLayer<Dtype>::Show_cpg(const Dtype *cpg_data, const int current_label,
   stringstream save_path;
   stringstream save_path_jet;
   save_path << save_dir.str() << "_o" << info << ".png";
-  save_path_jet << save_dir.str() << "_o" << info << "_jet.png";
+  save_path_jet << save_dir.str() << "jet_o" << info << ".png";
   Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
             save_path_jet.str(), 1, false, -1);
 
   save_path.str(std::string());
   save_path_jet.str(std::string());
   save_path << save_dir.str() << "_0" << info << ".png";
-  save_path_jet << save_dir.str() << "_0" << info << "_jet.png";
+  save_path_jet << save_dir.str() << "jet_0" << info << ".png";
   Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
             save_path_jet.str(), 0, false);
 
@@ -341,7 +383,7 @@ void CPGLayer<Dtype>::Show_cpg(const Dtype *cpg_data, const int current_label,
     save_path.str(std::string());
     save_path_jet.str(std::string());
     save_path << save_dir.str() << "_" << pow(10, -t) << info << ".png";
-    save_path_jet << save_dir.str() << "_" << pow(10, -t) << info << "_jet.png";
+    save_path_jet << save_dir.str() << "jet_" << pow(10, -t) << info << ".png";
     Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
               save_path_jet.str(), pow(10, -t), false);
 
@@ -349,8 +391,8 @@ void CPGLayer<Dtype>::Show_cpg(const Dtype *cpg_data, const int current_label,
     save_path_jet.str(std::string());
     save_path << save_dir.str() << "_" << pow(10, -t) << "_ra" << info
               << ".png";
-    save_path_jet << save_dir.str() << "_" << pow(10, -t) << "_ra" << info
-                  << "_jet.png";
+    save_path_jet << save_dir.str() << "jet_" << pow(10, -t) << "_ra" << info
+                  << ".png";
     Show_blob(cpg_data, channels_cpg_, height_im_, width_im_, save_path.str(),
               save_path_jet.str(), pow(10, -t), true);
   }
@@ -832,6 +874,7 @@ void CPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     }
 
     if (debug_info_) {
+      Show_im(im_blob_->cpu_data(), cls_id);
       Show_cpg(top[0]->cpu_data() + top[0]->offset(0, cls_id, 0, 0), cls_id,
                "_fusion");
     }
