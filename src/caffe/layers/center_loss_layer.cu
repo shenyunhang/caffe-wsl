@@ -22,6 +22,7 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   // get the top_k_ score RoI index
   for (int c = 0; c < num_class_; ++c) {
     roi_sets_[c].clear();
+    if (c == ignore_label_) continue;
     if (label_data[c] != 1) continue;
     LOG_IF(INFO, debug_info_) << "class: " << c;
     num_gt_class_++;
@@ -52,7 +53,7 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   Dtype* diff_data = diff_.mutable_gpu_data();
   Dtype* diff_diff = diff_.mutable_gpu_diff();
 
-  // TODO(YH): BUG, RoI score is forget to use.
+  // TODO(YH): BUG, RoI score is forgot to use.
   Dtype dot = 0;
   for (int c = 0; c < num_class_; ++c) {
     center_selector_[c] = -1;

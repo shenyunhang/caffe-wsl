@@ -1,9 +1,9 @@
-#include <vector>
 #include <cfloat>
+#include <vector>
 
+#include "caffe/filler.hpp"
 #include "caffe/layers/center_loss_layer.hpp"
 #include "caffe/util/math_functions.hpp"
-#include "caffe/filler.hpp"
 
 namespace caffe {
 
@@ -18,8 +18,10 @@ void CenterLossLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   debug_info_ = this->layer_param_.center_loss_param().debug_info();
   update_ = this->layer_param_.center_loss_param().update();
   display_ = this->layer_param_.center_loss_param().display();
-  max_num_im_center_ = this->layer_param_.center_loss_param().max_num_im_center();
-  is_center_=true;
+  max_num_im_center_ =
+      this->layer_param_.center_loss_param().max_num_im_center();
+  ignore_label_ = this->layer_param_.center_loss_param().ignore_label();
+  is_center_ = true;
 
   dim_ = bottom[0]->channels() * bottom[0]->height() * bottom[0]->width();
   num_class_ = bottom[1]->channels();
@@ -39,7 +41,7 @@ void CenterLossLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     }
   }
 
-  pass_im_=0;
+  pass_im_ = 0;
   accum_loss_ = 0;
   total_iter_ = 0;
 

@@ -1,8 +1,8 @@
 #ifndef CAFFE_CENTER_LOSS_LAYER_HPP_
 #define CAFFE_CENTER_LOSS_LAYER_HPP_
 
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include "caffe/blob.hpp"
 #include "caffe/layer.hpp"
@@ -76,6 +76,8 @@ class CenterLossLayer : public LossLayer<Dtype> {
   int display_;
   int pass_im_;
   int max_num_im_center_;
+
+  int ignore_label_;
 };
 
 }  // namespace caffe

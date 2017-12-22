@@ -1366,6 +1366,7 @@ message CenterLossParameter {
   optional uint32 display = 6 [default = 1280];
   optional uint32 update = 7 [default = 128];
   optional int32 max_num_im_center = 8 [default = -1];
+  optional int32 ignore_label = 9 [default = -1];
 }
 
 message RegionPoolingParameter {
