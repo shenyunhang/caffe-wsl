@@ -84,7 +84,8 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     dot += c_dot;
   }
 
-  Dtype loss = dot / num_gt_class_ / top_k_ / dim_ / Dtype(2);
+  Dtype loss =
+      num_gt_class_ > 0 ? dot / num_gt_class_ / top_k_ / dim_ / Dtype(2) : 0;
   top[0]->mutable_cpu_data()[0] = loss;
 
   accum_loss_ += loss;
@@ -96,12 +97,19 @@ void CenterLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     accum_loss_ = 0;
 
     for (int c = 0; c < num_class_; ++c) {
-      std::cout << "(";
       for (int m = 0; m < num_center_; ++m) {
-        std::cout << accum_update_class_[c][m] << " ";
+        std::cout << accum_update_class_[c][m] << "\t";
         accum_update_class_[c][m] = 0;
       }
-      std::cout << "\b)";
+      std::cout << "\t";
+      for (int m = 0; m < num_center_; ++m) {
+        Dtype asum;
+        caffe_gpu_asum(
+            dim_, this->blobs_[0]->gpu_data() + this->blobs_[0]->offset(c, m),
+            &asum);
+        std::cout << asum << "\t";
+      }
+      std::cout << std::endl;
     }
     std::cout << std::endl;
   }
@@ -132,7 +140,9 @@ void CenterLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
   caffe_gpu_set(bottom[0]->count(), Dtype(0), bottom[0]->mutable_gpu_diff());
 
-  const Dtype alpha = top[0]->cpu_diff()[0] / num_gt_class_ / top_k_ / dim_;
+  const Dtype alpha =
+      num_gt_class_ > 0 ? top[0]->cpu_diff()[0] / num_gt_class_ / top_k_ / dim_
+                        : 0;
   const Dtype* diff_data = diff_.gpu_data();
   LOG_IF(INFO, debug_info_) << "alpha: " << alpha
                             << " weight: " << top[0]->cpu_diff()[0];
