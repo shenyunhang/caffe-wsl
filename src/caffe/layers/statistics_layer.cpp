@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <cfloat>
-#include <vector>
-#include <iostream>  // std::cout, std::fixed
 #include <iomanip>   // std::setprecision
+#include <iostream>  // std::cout, std::fixed
+#include <vector>
 
 #include "caffe/layers/statistics_layer.hpp"
 #include "caffe/util/math_functions.hpp"
@@ -134,7 +134,8 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   if (pass_im_ % display_ != 0) return;
 
   std::cout << "#class\tprediction\t#roi\t#class\tpredition\tpos\t\tneg\t\t#"
-               "roi\t#left\t%\t\tclass" << std::endl;
+               "roi\t#left\t%\t\tclass"
+            << std::endl;
 
   for (int c = 0; c < num_class_; ++c) {
     std::cout << std::fixed << std::setprecision(7);
@@ -158,7 +159,7 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       CHECK_EQ(cpg_.roi[c], 0) << "There should no regions.";
       CHECK_EQ(cpg_.roi_left[c], 0) << "There should no regions.";
       std::cout << "\t0\t0.000000\t0.000000\t0.000000\t000\t000\t0.000000\t"
-                << voc_label_[c] << std::endl;
+                << std::endl;
     } else {
       std::cout << "\t" << cpg_.label[c] << "\t"
                 << cpg_.predict[c] / cpg_.label[c] << "\t"
@@ -166,8 +167,7 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                 << cpg_.predict_neg[c] / cpg_.label[c] << "\t"
                 << cpg_.roi[c] / cpg_.label[c] << "\t"
                 << cpg_.roi_left[c] / cpg_.label[c] << "\t"
-                << 1.0 * cpg_.roi_left[c] / cpg_.roi[c] << "\t" << voc_label_[c]
-                << std::endl;
+                << 1.0 * cpg_.roi_left[c] / cpg_.roi[c] << "\t" << std::endl;
     }
 
     cpg_.label[c] = 0;
