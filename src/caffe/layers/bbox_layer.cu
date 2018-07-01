@@ -57,7 +57,7 @@ void Show_bboxes(Blob<Dtype> *bbox_blob, const int num_class_,
 
 template <typename Dtype>
 void Show_blob(const Dtype *data, const int channels, const int height,
-               const int width, const string save_opg_path,
+               const int width, const string save_cpg_path,
                const float threshold_, const int fill = 0) {
   Dtype maxval = -FLT_MAX;
   Dtype sum = 0;
@@ -84,17 +84,17 @@ void Show_blob(const Dtype *data, const int channels, const int height,
   Dtype scale_factor = 255.0 / maxval;
 
   //-----------------------------------------------------------------------
-  cv::Mat opg_mat;
+  cv::Mat cpg_mat;
   if (channels == 3) {
-    opg_mat = cv::Mat(height, width, CV_8UC3);
+    cpg_mat = cv::Mat(height, width, CV_8UC3);
   } else if (channels == 1) {
-    opg_mat = cv::Mat(height, width, CV_8UC1);
+    cpg_mat = cv::Mat(height, width, CV_8UC1);
   } else {
     LOG(FATAL) << "channels should 1 or 3";
   }
 
   sum = 0;
-  uchar *opg_mat_data = opg_mat.data;
+  uchar *cpg_mat_data = cpg_mat.data;
   for (int c = 0; c < channels; c++) {
     for (int h = 0; h < height; h++) {
       for (int w = 0; w < width; w++) {
@@ -103,13 +103,13 @@ void Show_blob(const Dtype *data, const int channels, const int height,
         /*Dtype value = abs(data[index]);*/
         Dtype value = data[index] > 0 ? data[index] : 0;
         if (value > maxval) {
-          opg_mat_data[index_mat] = 255;
+          cpg_mat_data[index_mat] = 255;
           sum += maxval;
         } else {
           if (fill >= 0) {
-            opg_mat_data[index_mat] = fill;
+            cpg_mat_data[index_mat] = fill;
           } else {
-            opg_mat_data[index_mat] = scale_factor * value;
+            cpg_mat_data[index_mat] = scale_factor * value;
           }
           sum += value;
         }
@@ -120,16 +120,16 @@ void Show_blob(const Dtype *data, const int channels, const int height,
   LOG(INFO) << "max_value: " << maxval
             << " mean: " << sum / channels / height / width;
 
-  cv::imwrite(save_opg_path, opg_mat);
+  cv::imwrite(save_cpg_path, cpg_mat);
 
   //-----------------------------------------------------------------------
-  /*const Dtype* opg_cpu=opg_blob->cpu_data();*/
+  /*const Dtype* cpg_cpu=cpg_blob->cpu_data();*/
   /*int total[26];*/
   /*for(int i=0;i<26;++i){*/
   /*total[i]=0;*/
   /*}*/
-  /*for(int e=0;e<opg_blob->count();e++){*/
-  /*int level=int(opg_cpu[e]/10);*/
+  /*for(int e=0;e<cpg_blob->count();e++){*/
+  /*int level=int(cpg_cpu[e]/10);*/
   /*total[level]++;*/
   /*}*/
   /*for(int i=0;i<26;++i){*/
@@ -183,8 +183,8 @@ Dtype get_num_ob_(const Dtype *in, const int count, const Dtype threshold) {
 
 template <typename Dtype>
 void BBoxLayer<Dtype>::Score_map_crf() {
-  crf_data_->ReshapeLike(*raw_opg_);
-  caffe_copy(crf_data_->count(), raw_opg_->cpu_data(),
+  crf_data_->ReshapeLike(*raw_cpg_);
+  caffe_copy(crf_data_->count(), raw_cpg_->cpu_data(),
              crf_data_->mutable_cpu_data());
 
   //-----------------------------------------------------------------------
@@ -214,10 +214,10 @@ void BBoxLayer<Dtype>::Score_map_crf() {
   shared_ptr<Blob<Dtype> > feature_blob = conv5_blob;
 
   //-----------------------------------------------------------------------
-  vector<int> crf_opg_shape = raw_opg_->shape();
-  crf_opg_shape[1] = 2;
-  crf_opg_->Reshape(crf_opg_shape);
-  caffe_set(crf_opg_->count(), Dtype(0), crf_opg_->mutable_cpu_data());
+  vector<int> crf_cpg_shape = raw_cpg_->shape();
+  crf_cpg_shape[1] = 2;
+  crf_cpg_->Reshape(crf_cpg_shape);
+  caffe_set(crf_cpg_->count(), Dtype(0), crf_cpg_->mutable_cpu_data());
 
   Blob<Dtype> fusion_blob;
   vector<int> fusion_shape = feature_blob->shape();
@@ -228,26 +228,26 @@ void BBoxLayer<Dtype>::Score_map_crf() {
   const int a_offset = fusion_blob.offset(0, 1, 0, 0);
   for (int c = 0; c < feature_blob->channels(); ++c) {
     /*caffe_abs(a_offset, feature_blob->cpu_data() + c * a_offset,
-     * crf_opg_->mutable_cpu_diff());*/
-    /*caffe_add(a_offset, crf_opg_->cpu_diff(), crf_opg_->cpu_data(),
-     * crf_opg_->mutable_cpu_data());*/
+     * crf_cpg_->mutable_cpu_diff());*/
+    /*caffe_add(a_offset, crf_cpg_->cpu_diff(), crf_cpg_->cpu_data(),
+     * crf_cpg_->mutable_cpu_data());*/
     caffe_add(a_offset, feature_blob->cpu_data() + c * a_offset,
               fusion_blob.cpu_data(), fusion_blob.mutable_cpu_data());
   }
 
   caffe_cpu_interp2<Dtype, false>(
       1, fusion_blob.cpu_data(), 0, 0, fusion_shape[2], fusion_shape[3],
-      fusion_shape[2], fusion_shape[3], crf_opg_->mutable_cpu_data(), 0, 0,
-      crf_opg_shape[2], crf_opg_shape[3], crf_opg_shape[2], crf_opg_shape[3]);
+      fusion_shape[2], fusion_shape[3], crf_cpg_->mutable_cpu_data(), 0, 0,
+      crf_cpg_shape[2], crf_cpg_shape[3], crf_cpg_shape[2], crf_cpg_shape[3]);
 
   const Dtype max_value =
-      max_element_bbox(crf_opg_->cpu_data(), crf_opg_->count());
+      max_element_bbox(crf_cpg_->cpu_data(), crf_cpg_->count());
   const Dtype scale_factor = 1 / (max_value);
-  crf_opg_->scale_data(scale_factor);
-  Dtype *crf_opg = crf_opg_->mutable_cpu_data();
-  for (int i = 0; i < crf_opg_->count(); ++i) {
-    if (crf_opg[i] < 0.0) {
-      crf_opg[i] = 0;
+  crf_cpg_->scale_data(scale_factor);
+  Dtype *crf_cpg = crf_cpg_->mutable_cpu_data();
+  for (int i = 0; i < crf_cpg_->count(); ++i) {
+    if (crf_cpg[i] < 0.0) {
+      crf_cpg[i] = 0;
     }
   }
 
@@ -257,8 +257,8 @@ void BBoxLayer<Dtype>::Score_map_crf() {
 
   //-----------------------------------------------------------------------
   crf_data_dim_->Reshape(1, 2, 1, 1);
-  crf_data_dim_->mutable_cpu_data()[0] = raw_opg_->shape(2);
-  crf_data_dim_->mutable_cpu_data()[1] = raw_opg_->shape(3);
+  crf_data_dim_->mutable_cpu_data()[0] = raw_cpg_->shape(2);
+  crf_data_dim_->mutable_cpu_data()[1] = raw_cpg_->shape(3);
 
   //-----------------------------------------------------------------------
   crf_layer_->Forward(crf_bottom_vec_, crf_top_vec_);
@@ -266,13 +266,13 @@ void BBoxLayer<Dtype>::Score_map_crf() {
   stringstream save_path;
   save_path << "tmp/" << total_im_ << "_feat.png";
   /*Show_blob(crf_output, false, n, rows, cols, channels,
-   * save_crf_opg_path.str());*/
+   * save_crf_cpg_path.str());*/
   Show_blob(crf_output_->cpu_data(), 1, crf_output_->height(),
             crf_output_->width(), save_path.str(), 1);
 
   stringstream save_fusion_path;
   save_fusion_path << "tmp/" << total_im_ << "_fusion.png";
-  Show_blob(crf_opg_->cpu_data(), 1, crf_opg_->height(), crf_opg_->width(),
+  Show_blob(crf_cpg_->cpu_data(), 1, crf_cpg_->height(), crf_cpg_->width(),
             save_fusion_path.str(), 1);
 }
 
@@ -287,42 +287,42 @@ void BBoxLayer<Dtype>::BBox_crf(const int label) {
   caffe_copy(crf_data_->count(), im_blob->cpu_data(),
              crf_data_->mutable_cpu_data());
 
-  vector<int> opg_shape = im_blob->shape();
-  opg_shape[1] = 2;
-  crf_opg_->Reshape(opg_shape);
+  vector<int> cpg_shape = im_blob->shape();
+  cpg_shape[1] = 2;
+  crf_cpg_->Reshape(cpg_shape);
 
-  /*caffe_copy(crf_opg_->count(), im_blob->cpu_diff(),*/
-  /*crf_opg_->mutable_cpu_data());*/
+  /*caffe_copy(crf_cpg_->count(), im_blob->cpu_diff(),*/
+  /*crf_cpg_->mutable_cpu_data());*/
 
-  const int a_offset = crf_opg_->offset(0, 1, 0, 0);
-  caffe_abs(a_offset, im_blob->cpu_diff(), crf_opg_->mutable_cpu_data());
+  const int a_offset = crf_cpg_->offset(0, 1, 0, 0);
+  caffe_abs(a_offset, im_blob->cpu_diff(), crf_cpg_->mutable_cpu_data());
   caffe_abs(a_offset, im_blob->cpu_diff() + 1 * a_offset,
-            crf_opg_->mutable_cpu_diff());
-  caffe_add(a_offset, crf_opg_->cpu_diff(), crf_opg_->cpu_data(),
-            crf_opg_->mutable_cpu_data());
+            crf_cpg_->mutable_cpu_diff());
+  caffe_add(a_offset, crf_cpg_->cpu_diff(), crf_cpg_->cpu_data(),
+            crf_cpg_->mutable_cpu_data());
   caffe_abs(a_offset, im_blob->cpu_diff() + 2 * a_offset,
-            crf_opg_->mutable_cpu_diff());
-  caffe_add(a_offset, crf_opg_->cpu_diff(), crf_opg_->cpu_data(),
-            crf_opg_->mutable_cpu_data());
+            crf_cpg_->mutable_cpu_diff());
+  caffe_add(a_offset, crf_cpg_->cpu_diff(), crf_cpg_->cpu_data(),
+            crf_cpg_->mutable_cpu_data());
 
   const Dtype *max_value = std::max_element(
-      crf_opg_->cpu_data(), crf_opg_->cpu_data() + crf_opg_->count());
+      crf_cpg_->cpu_data(), crf_cpg_->cpu_data() + crf_cpg_->count());
 
   if (debug_info_) {
     LOG(INFO) << "BBox_crf max_value: " << *max_value;
   }
   const Dtype scale_factor = 1 / (*max_value);
-  crf_opg_->scale_data(scale_factor);
-  Dtype *crf_opg = crf_opg_->mutable_cpu_data();
-  for (int i = 0; i < crf_opg_->count(); ++i) {
-    if (crf_opg[i] < crf_threshold_) {
-      crf_opg[i] = 0;
+  crf_cpg_->scale_data(scale_factor);
+  Dtype *crf_cpg = crf_cpg_->mutable_cpu_data();
+  for (int i = 0; i < crf_cpg_->count(); ++i) {
+    if (crf_cpg[i] < crf_threshold_) {
+      crf_cpg[i] = 0;
     }
   }
 
-  /*caffe_cpu_axpby(a_offset, Dtype(-1), crf_opg_->cpu_data(), Dtype(0),
-   * crf_opg_->mutable_cpu_data() + a_offset);*/
-  /*caffe_add_scalar(a_offset, Dtype(1), crf_opg_->mutable_cpu_data() +
+  /*caffe_cpu_axpby(a_offset, Dtype(-1), crf_cpg_->cpu_data(), Dtype(0),
+   * crf_cpg_->mutable_cpu_data() + a_offset);*/
+  /*caffe_add_scalar(a_offset, Dtype(1), crf_cpg_->mutable_cpu_data() +
    * a_offset);*/
 
   crf_data_dim_->Reshape(1, 2, 1, 1);
@@ -331,13 +331,13 @@ void BBoxLayer<Dtype>::BBox_crf(const int label) {
 
   crf_layer_->Forward(crf_bottom_vec_, crf_top_vec_);
 
-  stringstream save_crf_opg_path;
-  save_crf_opg_path << "tmp/" << total_im_ << "_" << voc_label_[label]
+  stringstream save_crf_cpg_path;
+  save_crf_cpg_path << "tmp/" << total_im_ << "_" << voc_label_[label]
                     << "_crf.png";
   /*Show_blob(crf_output, false, n, rows, cols, channels,
-   * save_crf_opg_path.str());*/
+   * save_crf_cpg_path.str());*/
   Show_blob(crf_output_->cpu_data(), 1, crf_output_->height(),
-            crf_output_->width(), save_crf_opg_path.str(), 1);
+            crf_output_->width(), save_crf_cpg_path.str(), 1);
 }
 
 template <typename Dtype>
@@ -382,7 +382,7 @@ void BBoxLayer<Dtype>::After() {
 template <typename Dtype>
 void BBoxLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                                    const vector<Blob<Dtype> *> &top) {
-  if (!is_opg_) {
+  if (!is_cpg_) {
     return;
   }
 
@@ -410,20 +410,20 @@ void BBoxLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
                               << " score: " << predict_data[index];
 
     //-----------------------------------------------------------------------
-    caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_data());
-    caffe_gpu_set(raw_opg_->count(), Dtype(0), raw_opg_->mutable_gpu_diff());
-    for (int channel_id = 0; channel_id < channels_opg_; ++channel_id) {
-      caffe_gpu_abs(opg_size_, bottom[bottom_opgs_index_]->gpu_data() +
-                                   bottom[bottom_opgs_index_]
+    caffe_gpu_set(raw_cpg_->count(), Dtype(0), raw_cpg_->mutable_gpu_data());
+    caffe_gpu_set(raw_cpg_->count(), Dtype(0), raw_cpg_->mutable_gpu_diff());
+    for (int channel_id = 0; channel_id < channels_cpg_; ++channel_id) {
+      caffe_gpu_abs(cpg_size_, bottom[bottom_cpgs_index_]->gpu_data() +
+                                   bottom[bottom_cpgs_index_]
                                        ->offset(gt_id, channel_id, 0, 0),
-                    raw_opg_->mutable_gpu_diff());
+                    raw_cpg_->mutable_gpu_diff());
 
-      caffe_gpu_add(opg_size_, raw_opg_->gpu_data(), raw_opg_->gpu_diff(),
-                    raw_opg_->mutable_gpu_data());
+      caffe_gpu_add(cpg_size_, raw_cpg_->gpu_data(), raw_cpg_->gpu_diff(),
+                    raw_cpg_->mutable_gpu_data());
     }
-    /*LOG_IF(INFO,debug_info_)<<"raw_opg_[0]:"<<raw_opg_->cpu_data()[0];*/
+    /*LOG_IF(INFO,debug_info_)<<"raw_cpg_[0]:"<<raw_cpg_->cpu_data()[0];*/
     const int bbox_num = caffe_cpu_threshold_bbox(
-        raw_opg_, bboxes_, fg_threshold_, gt_class[gt_id]);
+        raw_cpg_, bboxes_, fg_threshold_, gt_class[gt_id]);
     caffe_copy(bboxes_->count(), bboxes_->cpu_data(),
                top[0]->mutable_cpu_data() + top[0]->offset(gt_class[gt_id]));
     total_roi_ += bbox_num;

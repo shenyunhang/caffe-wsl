@@ -1292,7 +1292,7 @@ message PolarConstraintParameter {
 
 // Message that stores parameters used by BBoxLayer
 message BBoxParameter {
-  optional bool is_opg = 1 [default = true];
+  optional bool is_cpg = 1 [default = true];
   optional bool debug_info = 3 [default = false];
   optional float predict_threshold = 6 [default = 0.5];
   optional float crf_threshold = 10 [default = 0.5];

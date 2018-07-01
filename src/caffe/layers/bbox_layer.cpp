@@ -10,7 +10,7 @@ template <typename Dtype>
 void BBoxLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                   const vector<Blob<Dtype>*>& top) {
   BBoxParameter this_layer_param = this->layer_param_.bbox_param();
-  is_opg_ = this_layer_param.is_opg();
+  is_cpg_ = this_layer_param.is_cpg();
   debug_info_ = this_layer_param.debug_info();
   predict_threshold_ = this_layer_param.predict_threshold();
   crf_threshold_ = this_layer_param.crf_threshold();
@@ -21,7 +21,7 @@ void BBoxLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   is_crf_ = this_layer_param.is_crf();
   is_pred_ = this_layer_param.is_pred();
 
-  bottom_opgs_index_ = 0;
+  bottom_cpgs_index_ = 0;
   bottom_predict_index_ = 1;
 
   total_im_ = 0;
@@ -36,7 +36,7 @@ void BBoxLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   max_bb_per_cls_ = 4;
 
   LOG(INFO) << "----------------------------------------------";
-  LOG(INFO) << "is_opg: " << is_opg_;
+  LOG(INFO) << "is_cpg: " << is_cpg_;
   LOG(INFO) << "is_pred: " << is_pred_;
   LOG(INFO) << "debug_info_: " << debug_info_;
   LOG(INFO) << "predict_threshold_:" << predict_threshold_;
@@ -51,14 +51,14 @@ void BBoxLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   if (is_crf_) {
     crf_bottom_vec_.clear();
-    crf_bottom_vec_.push_back(crf_opg_.get());
+    crf_bottom_vec_.push_back(crf_cpg_.get());
     crf_bottom_vec_.push_back(crf_data_dim_.get());
     crf_bottom_vec_.push_back(crf_data_.get());
     crf_top_vec_.clear();
     crf_top_vec_.push_back(crf_output_.get());
 
     crf_data_->Reshape(1, 3, 1000, 1000);
-    crf_opg_->Reshape(1, 1, 1000, 1000);
+    crf_cpg_->Reshape(1, 1, 1000, 1000);
     crf_data_dim_->Reshape(1, 2, 1, 1);
     crf_layer_->SetUp(crf_bottom_vec_, crf_top_vec_);
   }
@@ -108,12 +108,12 @@ void BBoxLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   bboxes_shape.push_back(4);
   bboxes_->Reshape(bboxes_shape);
 
-  channels_opg_ = bottom[bottom_opgs_index_]->channels();
-  height_im_ = bottom[bottom_opgs_index_]->height();
-  width_im_ = bottom[bottom_opgs_index_]->width();
-  opg_size_ = height_im_ * width_im_;
+  channels_cpg_ = bottom[bottom_cpgs_index_]->channels();
+  height_im_ = bottom[bottom_cpgs_index_]->height();
+  width_im_ = bottom[bottom_cpgs_index_]->width();
+  cpg_size_ = height_im_ * width_im_;
 
-  raw_opg_->Reshape(1, 1, height_im_, width_im_);
+  raw_cpg_->Reshape(1, 1, height_im_, width_im_);
 
   CHECK_EQ(bottom[bottom_predict_index_]->count(), num_im_ * num_class_)
       << "size should be the same";
