@@ -811,7 +811,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   InitFilter(bottom[bottom_index_["label"]]->gpu_data(),
              filter_.mutable_gpu_data());
 
-  LOG_IF(INFO, debug_info_) << "------------------start-----------------------";
+  LOG_IF(INFO, debug_info_) << "------------------CSC start-----------------------";
   LOG_IF(INFO, debug_info_) << "pass_im_: " << pass_im_;
   //-----------------------------------------------------------------------
   //-----------------------------------------------------------------------
@@ -832,7 +832,7 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     int index = cls_id;
     LOG_IF(INFO, debug_info_) << "class: " << voc_label_[cls_id]
                               << "\t\tlabel: " << bottom_label[index]
-                              << " score: " << bottom_predict[index];
+                              << " predict: " << bottom_predict[index];
 
     //-----------------------------------------------------------------------
     // propocess data
@@ -988,6 +988,15 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
               re_predict += 1 * rois_score[roi_id * num_class_ + cls_id];
             }
           }
+          if (debug_info_) {
+            printf("--------------------------------------------------\n");
+            printf("Show CSC:\n");
+	    printf("num_roi_ %d\n", num_roi_);
+            for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
+              Dtype value = filter_data[roi_id * num_class_ + cls_id];
+              printf("roi_id %d cls_id %d CSC %f\n", roi_id, cls_id, value);
+            }
+          }
         }
 
         // drop
@@ -1015,10 +1024,10 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
           int e0 = 0;
           for (int roi_id = 0; roi_id < num_roi_; roi_id++) {
             Dtype value = filter_data[roi_id * num_class_ + cls_id];
-            std::cout << value << "(" << rois_data[roi_id * 5 + 1] << " "
-                      << rois_data[roi_id * 5 + 2] << " "
-                      << rois_data[roi_id * 5 + 3] << " "
-                      << rois_data[roi_id * 5 + 4] << ") ";
+            //std::cout << value << "(" << rois_data[roi_id * 5 + 1] << " "
+                      //<< rois_data[roi_id * 5 + 2] << " "
+                      //<< rois_data[roi_id * 5 + 3] << " "
+                      //<< rois_data[roi_id * 5 + 4] << ") ";
             if (value > 0)
               a0++;
             else if (value < 0)
@@ -1027,8 +1036,8 @@ void RepartitionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
               e0++;
           }
           std::cout << std::endl;
-          std::cout << "a0: " << a0 << " b0: " << b0 << " e0: " << e0
-                    << std::endl;
+          std::cout << "cls_id " << cls_id <<" above 0: " << a0 << " below 0: " << b0
+                    << " equal 0: " << e0 << std::endl;
           std::cout << "re_predict: " << re_predict << std::endl;
         }
       } break;

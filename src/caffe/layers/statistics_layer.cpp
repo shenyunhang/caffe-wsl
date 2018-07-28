@@ -29,14 +29,18 @@ void StatisticsLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     ori_.predict_pos.push_back(0.0);
     ori_.predict_neg.push_back(0.0);
     ori_.roi.push_back(0);
-    ori_.roi_left.push_back(0);
+    ori_.roi_zero.push_back(0);
+    ori_.roi_pos.push_back(0);
+    ori_.roi_neg.push_back(0);
 
     cpg_.label.push_back(0);
     cpg_.predict.push_back(0.0);
     cpg_.predict_pos.push_back(0.0);
     cpg_.predict_neg.push_back(0.0);
     cpg_.roi.push_back(0);
-    cpg_.roi_left.push_back(0);
+    cpg_.roi_zero.push_back(0);
+    cpg_.roi_pos.push_back(0);
+    cpg_.roi_neg.push_back(0);
   }
 
   ori_.accum_label = 0;
@@ -44,14 +48,18 @@ void StatisticsLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   ori_.accum_predict_pos = 0;
   ori_.accum_predict_neg = 0;
   ori_.accum_roi = 0;
-  ori_.accum_roi_left = 0;
+  ori_.accum_roi_zero = 0;
+  ori_.accum_roi_pos = 0;
+  ori_.accum_roi_neg = 0;
 
   cpg_.accum_label = 0;
   cpg_.accum_predict = 0;
   cpg_.accum_predict_pos = 0;
   cpg_.accum_predict_neg = 0;
   cpg_.accum_roi = 0;
-  cpg_.accum_roi_left = 0;
+  cpg_.accum_roi_zero = 0;
+  cpg_.accum_roi_pos = 0;
+  cpg_.accum_roi_neg = 0;
 
   voc_label_.push_back("aeroplane");    // 0
   voc_label_.push_back("bicycle");      // 1
@@ -125,8 +133,14 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     cpg_.accum_roi += num_roi_;
     for (int r = 0; r < num_roi_; ++r) {
       if (filter[r * num_class_ + c] > 0) {
-        cpg_.roi_left[c]++;
-        cpg_.accum_roi_left++;
+        cpg_.roi_pos[c]++;
+        cpg_.accum_roi_pos++;
+      } else if (filter[r * num_class_ + c] < 0) {
+        cpg_.roi_neg[c]++;
+        cpg_.accum_roi_neg++;
+      } else {
+        cpg_.roi_zero[c]++;
+        cpg_.accum_roi_zero++;
       }
     }
   }
@@ -134,7 +148,7 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   if (pass_im_ % display_ != 0) return;
 
   std::cout << "#class\tprediction\t#roi\t#class\tpredition\tpos\t\tneg\t\t#"
-               "roi\t#left\t%\t\tclass"
+               "roi\t#pos\t%\t\t#neg\t%\t\t#zero\t%\t\tclass"
             << std::endl;
 
   for (int c = 0; c < num_class_; ++c) {
@@ -157,8 +171,11 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       CHECK_EQ(cpg_.predict_pos[c], 0) << "There should no regions.";
       CHECK_EQ(cpg_.predict_neg[c], 0) << "There should no regions.";
       CHECK_EQ(cpg_.roi[c], 0) << "There should no regions.";
-      CHECK_EQ(cpg_.roi_left[c], 0) << "There should no regions.";
-      std::cout << "\t0\t0.000000\t0.000000\t0.000000\t000\t000\t0.000000\t"
+      CHECK_EQ(cpg_.roi_pos[c], 0) << "There should no regions.";
+      CHECK_EQ(cpg_.roi_neg[c], 0) << "There should no regions.";
+      CHECK_EQ(cpg_.roi_zero[c], 0) << "There should no regions.";
+      std::cout << "\t0\t0.000000\t0.000000\t0.000000\t000\t000\t0."
+                   "000000\t000\t0.000000\t000\t0.000000\t"
                 << std::endl;
     } else {
       std::cout << "\t" << cpg_.label[c] << "\t"
@@ -166,8 +183,12 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                 << cpg_.predict_pos[c] / cpg_.label[c] << "\t"
                 << cpg_.predict_neg[c] / cpg_.label[c] << "\t"
                 << cpg_.roi[c] / cpg_.label[c] << "\t"
-                << cpg_.roi_left[c] / cpg_.label[c] << "\t"
-                << 1.0 * cpg_.roi_left[c] / cpg_.roi[c] << "\t" << std::endl;
+                << cpg_.roi_pos[c] / cpg_.label[c] << "\t"
+                << 1.0 * cpg_.roi_pos[c] / cpg_.roi[c] << "\t"
+                << cpg_.roi_neg[c] / cpg_.label[c] << "\t"
+                << 1.0 * cpg_.roi_neg[c] / cpg_.roi[c] << "\t"
+                << cpg_.roi_zero[c] / cpg_.label[c] << "\t"
+                << 1.0 * cpg_.roi_zero[c] / cpg_.roi[c] << "\t" << std::endl;
     }
 
     cpg_.label[c] = 0;
@@ -175,7 +196,9 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     cpg_.predict_pos[c] = 0;
     cpg_.predict_neg[c] = 0;
     cpg_.roi[c] = 0;
-    cpg_.roi_left[c] = 0;
+    cpg_.roi_pos[c] = 0;
+    cpg_.roi_neg[c] = 0;
+    cpg_.roi_zero[c] = 0;
   }
 
   if (ori_.accum_label > 0 && cpg_.accum_label > 0) {
@@ -186,8 +209,12 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
               << cpg_.accum_predict_pos / cpg_.accum_label << "\t"
               << cpg_.accum_predict_neg / cpg_.accum_label << "\t"
               << cpg_.accum_roi / cpg_.accum_label << "\t"
-              << cpg_.accum_roi_left / cpg_.accum_label << "\t"
-              << 1.0 * cpg_.accum_roi_left / cpg_.accum_roi << "\t" << display_
+              << cpg_.accum_roi_pos / cpg_.accum_label << "\t"
+              << 1.0 * cpg_.accum_roi_pos / cpg_.accum_roi << "\t"
+              << cpg_.accum_roi_neg / cpg_.accum_label << "\t"
+              << 1.0 * cpg_.accum_roi_neg / cpg_.accum_roi << "\t"
+              << cpg_.accum_roi_zero / cpg_.accum_label << "\t"
+              << 1.0 * cpg_.accum_roi_zero / cpg_.accum_roi << "\t" << display_
               << std::endl;
   }
 
@@ -196,14 +223,18 @@ void StatisticsLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   ori_.accum_predict_pos = 0;
   ori_.accum_predict_neg = 0;
   ori_.accum_roi = 0;
-  ori_.accum_roi_left = 0;
+  ori_.accum_roi_pos = 0;
+  ori_.accum_roi_neg = 0;
+  ori_.accum_roi_zero = 0;
 
   cpg_.accum_label = 0;
   cpg_.accum_predict = 0;
   cpg_.accum_predict_pos = 0;
   cpg_.accum_predict_neg = 0;
   cpg_.accum_roi = 0;
-  cpg_.accum_roi_left = 0;
+  cpg_.accum_roi_pos = 0;
+  cpg_.accum_roi_neg = 0;
+  cpg_.accum_roi_zero = 0;
 }
 
 template <typename Dtype>

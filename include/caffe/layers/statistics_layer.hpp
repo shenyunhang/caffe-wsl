@@ -51,14 +51,18 @@ class StatisticsLayer : public Layer<Dtype> {
     vector<Dtype> predict_pos;
     vector<Dtype> predict_neg;
     vector<int> roi;
-    vector<int> roi_left;
+    vector<int> roi_zero;
+    vector<int> roi_pos;
+    vector<int> roi_neg;
 
     int accum_label;
     Dtype accum_predict;
     Dtype accum_predict_pos;
     Dtype accum_predict_neg;
     int accum_roi;
-    int accum_roi_left;
+    int accum_roi_zero;
+    int accum_roi_pos;
+    int accum_roi_neg;
   };
 
   statistic ori_;

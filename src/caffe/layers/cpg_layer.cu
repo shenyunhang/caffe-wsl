@@ -324,9 +324,9 @@ void CPGLayer<Dtype>::Show_im(const Dtype *im_data, const int current_label) {
   stringstream save_path;
   save_path << save_dir.str() << "img.png";
 
-  int channels= channels_cpg_;
-  int height= height_im_;
-  int width= width_im_;
+  int channels = channels_cpg_;
+  int height = height_im_;
+  int width = width_im_;
 
   cv::Mat cpg_mat;
   if (channels == 3) {
@@ -343,10 +343,9 @@ void CPGLayer<Dtype>::Show_im(const Dtype *im_data, const int current_label) {
       for (int w = 0; w < width; w++) {
         int index = (c * height + h) * width + w;
         int index_mat = (h * width + w) * channels + c;
-        Dtype value = im_data[index]+255.0/2.0;
+        Dtype value = im_data[index] + 255.0 / 2.0;
 
-          cpg_mat_data[index_mat] = value;
-
+        cpg_mat_data[index_mat] = value;
       }
     }
   }
@@ -573,7 +572,6 @@ template <typename Dtype>
 void CPGLayer<Dtype>::After() {
   pass_im_ += num_im_;
 
-
   accum_im_ += num_im_;
   accum_gt_ += gt_class_.size();
   accum_bp_ += bp_class_.size();
@@ -601,7 +599,8 @@ void CPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
   // Show info
   //-----------------------------------------------------------------------
   Show_info();
-  LOG_IF(INFO, debug_info_) << "------------------start-----------------------";
+  LOG_IF(INFO, debug_info_)
+      << "------------------CPG start-----------------------";
   LOG_IF(INFO, debug_info_) << "save_id_: " << save_id_;
 
   //-----------------------------------------------------------------------
@@ -624,7 +623,7 @@ void CPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     int index = cls_id;
     LOG_IF(INFO, debug_info_) << "class: " << voc_label_[cls_id]
                               << "\t\tlabel: " << bottom_label[index]
-                              << " score: " << predict_data[index];
+                              << " predict: " << predict_data[index];
     if (Need_Repartition(cls_id, bottom_label[index], predict_data[index])) {
     } else if (Need_Order(cls_id, bottom_label[index], predict_data[index])) {
     } else {
@@ -676,7 +675,7 @@ void CPGLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype> *> &bottom,
     int index = bp_class_[bp_id];
     LOG_IF(INFO, debug_info_) << "class: " << voc_label_[bp_class_[bp_id]]
                               << " label: " << bottom_label[index]
-                              << " score: " << predict_data[index];
+                              << " predict: " << predict_data[index];
 
     caffe_gpu_set(predict_blob_->count(), static_cast<Dtype>(0),
                   predict_blob_->mutable_gpu_diff());
